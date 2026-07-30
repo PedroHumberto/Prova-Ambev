@@ -7,7 +7,6 @@ namespace Ambev.DeveloperEvaluation.Domain.Sales.Entities;
 
 public sealed class Sale
 {
-    private const decimal MaximumMonetaryValue = 9999999999999999.99m;
     private readonly List<SaleItem> _items = [];
     private readonly List<IDomainEvent> _domainEvents = [];
     private readonly ReadOnlyCollection<SaleItem> _readOnlyItems;
@@ -425,7 +424,7 @@ public sealed class Sale
 
     private static void EnsureTotalRange(decimal value, string valueName)
     {
-        if (value < 0 || value > MaximumMonetaryValue)
+        if (value < 0 || value > MonetaryConstraints.MaximumValue)
         {
             throw new MonetaryValueOutOfRangeException(valueName);
         }
