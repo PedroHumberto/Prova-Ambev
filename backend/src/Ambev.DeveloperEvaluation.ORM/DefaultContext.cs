@@ -1,6 +1,8 @@
 ﻿using Ambev.DeveloperEvaluation.Domain.Entities;
 using Ambev.DeveloperEvaluation.Domain.Exceptions;
 using Ambev.DeveloperEvaluation.Domain.Repositories;
+using Ambev.DeveloperEvaluation.Domain.Sales.Entities;
+using Ambev.DeveloperEvaluation.Domain.Sales.Exceptions;
 using Ambev.DeveloperEvaluation.ORM.Mapping;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
@@ -14,12 +16,15 @@ public class DefaultContext : DbContext, IUnitOfWork
 {
     public DbSet<User> Users => Set<User>();
 
+    public DbSet<Sale> Sales => Set<Sale>();
+
     public DefaultContext(DbContextOptions<DefaultContext> options) : base(options)
     {
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasPostgresExtension("citext");
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
         base.OnModelCreating(modelBuilder);
     }
@@ -40,6 +45,32 @@ public class DefaultContext : DbContext, IUnitOfWork
 
             throw new DuplicateUserEmailException(email, exception);
         }
+        catch (DbUpdateException exception) when (IsDuplicateSaleNumber(exception))
+        {
+            var saleNumber = exception.Entries
+                .Select(entry => entry.Entity)
+                .OfType<Sale>()
+                .Select(sale => sale.SaleNumber)
+                .FirstOrDefault() ?? string.Empty;
+
+            throw new DuplicateSaleNumberException(saleNumber, exception);
+        }
+    }
+
+    public async Task<TResult> ExecuteInTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        if (Database.CurrentTransaction is not null)
+            throw new InvalidOperationException("A database transaction is already active.");
+
+        await using var transaction = await Database.BeginTransactionAsync(cancellationToken);
+        var result = await operation(cancellationToken);
+        await CommitAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return result;
     }
 
     private static bool IsDuplicateUserEmail(DbUpdateException exception) =>
@@ -47,6 +78,13 @@ public class DefaultContext : DbContext, IUnitOfWork
         {
             SqlState: PostgresErrorCodes.UniqueViolation,
             ConstraintName: UserConfiguration.UserEmailUniqueIndexName
+        };
+
+    private static bool IsDuplicateSaleNumber(DbUpdateException exception) =>
+        exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: SaleConfiguration.SaleNumberUniqueIndexName
         };
 }
 
