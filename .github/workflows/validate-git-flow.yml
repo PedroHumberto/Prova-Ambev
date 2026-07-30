@@ -1,0 +1,39 @@
+name: Validate Git Flow
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+
+permissions:
+  contents: read
+
+jobs:
+  validate-git-flow:
+    name: validate-git-flow
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate source branch
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        shell: bash
+        run: |
+          if [[ "$BASE_BRANCH" == "develop" && ! "$HEAD_BRANCH" =~ ^feature/.+ ]]; then
+            echo "::error::Pull requests to develop must originate from a feature/* branch."
+            exit 1
+          fi
+
+          if [[ "$BASE_BRANCH" == "main" && "$HEAD_BRANCH" != "develop" ]]; then
+            echo "::error::Pull requests to main must originate from develop."
+            exit 1
+          fi
+
+          echo "Valid Git Flow transition: $HEAD_BRANCH -> $BASE_BRANCH"
