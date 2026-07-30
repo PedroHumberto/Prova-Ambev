@@ -29,7 +29,6 @@ public class UserRepository : IUserRepository
     public async Task<User> CreateAsync(User user, CancellationToken cancellationToken = default)
     {
         await _context.Users.AddAsync(user, cancellationToken);
-        await _context.SaveChangesAsync(cancellationToken);
         return user;
     }
 
@@ -41,7 +40,9 @@ public class UserRepository : IUserRepository
     /// <returns>The user if found, null otherwise</returns>
     public async Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return await _context.Users.FirstOrDefaultAsync(o=> o.Id == id, cancellationToken);
+        return await _context.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(user => user.Id == id, cancellationToken);
     }
 
     /// <summary>
@@ -53,6 +54,7 @@ public class UserRepository : IUserRepository
     public async Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
     {
         return await _context.Users
+            .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
     }
 
@@ -64,12 +66,12 @@ public class UserRepository : IUserRepository
     /// <returns>True if the user was deleted, false if not found</returns>
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var user = await GetByIdAsync(id, cancellationToken);
+        var user = await _context.Users
+            .FirstOrDefaultAsync(user => user.Id == id, cancellationToken);
         if (user == null)
             return false;
 
         _context.Users.Remove(user);
-        await _context.SaveChangesAsync(cancellationToken);
         return true;
     }
 }

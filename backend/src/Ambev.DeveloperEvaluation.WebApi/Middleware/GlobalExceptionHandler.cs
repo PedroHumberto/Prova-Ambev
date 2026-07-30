@@ -1,4 +1,5 @@
 using Ambev.DeveloperEvaluation.Application.Common.Exceptions;
+using Ambev.DeveloperEvaluation.Domain.Exceptions;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -32,6 +33,10 @@ public sealed class GlobalExceptionHandler(
                 "Not Found",
                 exception.Message),
             UserAlreadyExistsException => (
+                StatusCodes.Status409Conflict,
+                "Conflict",
+                exception.Message),
+            DuplicateUserEmailException => (
                 StatusCodes.Status409Conflict,
                 "Conflict",
                 exception.Message),
