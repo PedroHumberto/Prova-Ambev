@@ -15,17 +15,23 @@ public class CreateUserHandler : IRequestHandler<CreateUserCommand, CreateUserRe
     private readonly IUserRepository _userRepository;
     private readonly IMapper _mapper;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IUnitOfWork _unitOfWork;
 
     /// <summary>
     /// Initializes a new instance of CreateUserHandler
     /// </summary>
     /// <param name="userRepository">The user repository</param>
     /// <param name="mapper">The AutoMapper instance</param>
-    public CreateUserHandler(IUserRepository userRepository, IMapper mapper, IPasswordHasher passwordHasher)
+    public CreateUserHandler(
+        IUserRepository userRepository,
+        IMapper mapper,
+        IPasswordHasher passwordHasher,
+        IUnitOfWork unitOfWork)
     {
         _userRepository = userRepository;
         _mapper = mapper;
         _passwordHasher = passwordHasher;
+        _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
     }
 
     /// <summary>
@@ -44,6 +50,8 @@ public class CreateUserHandler : IRequestHandler<CreateUserCommand, CreateUserRe
         user.Password = _passwordHasher.HashPassword(command.Password);
 
         var createdUser = await _userRepository.CreateAsync(user, cancellationToken);
+        await _unitOfWork.CommitAsync(cancellationToken);
+
         var result = _mapper.Map<CreateUserResult>(createdUser);
         return result;
     }

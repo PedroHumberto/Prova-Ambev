@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Ambev.DeveloperEvaluation.Application.Common.Exceptions;
+using Ambev.DeveloperEvaluation.Domain.Exceptions;
 using Ambev.DeveloperEvaluation.WebApi.Middleware;
 using FluentAssertions;
 using FluentValidation;
@@ -39,6 +40,12 @@ public class GlobalExceptionHandlerTests
             StatusCodes.Status409Conflict,
             "Conflict",
             "User with email test.user@example.com already exists"
+        },
+        {
+            new DuplicateUserEmailException("concurrent.user@example.com"),
+            StatusCodes.Status409Conflict,
+            "Conflict",
+            "User with email concurrent.user@example.com already exists"
         },
         {
             new InvalidOperationException("Sensitive internal detail"),
