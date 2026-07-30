@@ -37,6 +37,19 @@ public sealed class DuplicateActiveProductException : SalesDomainException
     }
 }
 
+public sealed class DuplicateSaleNumberException : SalesDomainException
+{
+    public DuplicateSaleNumberException(string saleNumber)
+        : base($"A sale with number '{saleNumber}' already exists.")
+    {
+    }
+
+    public DuplicateSaleNumberException(string saleNumber, Exception innerException)
+        : base($"A sale with number '{saleNumber}' already exists.", innerException)
+    {
+    }
+}
+
 public sealed class CancelledSaleModificationException : SalesDomainException
 {
     public CancelledSaleModificationException(Guid saleId)
