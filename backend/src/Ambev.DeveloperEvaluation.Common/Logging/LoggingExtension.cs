@@ -30,13 +30,12 @@ public static class LoggingExtension
     /// </summary>
     static readonly Func<LogEvent, bool> _filterPredicate = exclusionPredicate =>
     {
-
-        if (exclusionPredicate.Level != LogEventLevel.Information) return true;
+        if (exclusionPredicate.Level != LogEventLevel.Information) return false;
 
         exclusionPredicate.Properties.TryGetValue("StatusCode", out var statusCode);
         exclusionPredicate.Properties.TryGetValue("Path", out var path);
 
-        var excludeByStatusCode = statusCode == null || statusCode.ToString().Equals("200");
+        var excludeByStatusCode = statusCode?.ToString().Equals("200") ?? false;
         var excludeByPath = path?.ToString().Contains("/health") ?? false;
 
         return excludeByStatusCode && excludeByPath;
