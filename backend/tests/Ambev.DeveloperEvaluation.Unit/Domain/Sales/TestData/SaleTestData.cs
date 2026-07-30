@@ -1,4 +1,6 @@
 using Ambev.DeveloperEvaluation.Domain.Sales.Entities;
+using Bogus;
+using System.Globalization;
 
 namespace Ambev.DeveloperEvaluation.Unit.Domain.Sales.TestData;
 
@@ -39,6 +41,43 @@ internal static class SaleTestData
     internal static SaleItemReplacement Replacement(SaleItem item)
     {
         return new SaleItemReplacement(item.Id, item.ProductId, item.ProductName, item.Quantity, item.UnitPrice);
+    }
+}
+
+internal sealed class SaleBuilder
+{
+    private readonly Faker _faker = new("en")
+    {
+        Random = new Randomizer(20260730)
+    };
+    private SaleItemInput[]? _items;
+
+    internal SaleBuilder WithItems(params SaleItemInput[] items)
+    {
+        _items = items;
+        return this;
+    }
+
+    internal Sale Build()
+    {
+        var items = _items ??
+        [
+            new SaleItemInput(
+                _faker.Random.Guid(),
+                _faker.Commerce.ProductName(),
+                _faker.Random.Int(1, 20),
+                decimal.Parse(_faker.Commerce.Price(1, 100, 2), CultureInfo.InvariantCulture))
+        ];
+
+        return Sale.Create(
+            $"SALE-{_faker.Random.AlphaNumeric(12).ToUpperInvariant()}",
+            SaleTestData.SaleDate,
+            _faker.Random.Guid(),
+            _faker.Company.CompanyName(),
+            _faker.Random.Guid(),
+            _faker.Company.CompanyName(),
+            items,
+            new TestTimeProvider(SaleTestData.CreatedAt));
     }
 }
 
