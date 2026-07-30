@@ -36,11 +36,12 @@ bld/
 
 #IA
 .opencode
-.doc
+*.doc
 ANALISE.md
 TASKS.md
 template_projeto.md
 template_projeto.pdf
+doc
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
