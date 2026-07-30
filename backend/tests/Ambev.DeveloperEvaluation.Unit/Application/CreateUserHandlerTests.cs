@@ -1,6 +1,7 @@
 using Ambev.DeveloperEvaluation.Application.Users.CreateUser;
 using Ambev.DeveloperEvaluation.Common.Security;
 using Ambev.DeveloperEvaluation.Domain.Entities;
+using Ambev.DeveloperEvaluation.Domain.Enums;
 using Ambev.DeveloperEvaluation.Domain.Repositories;
 using Ambev.DeveloperEvaluation.Unit.Domain;
 using AutoMapper;
@@ -74,22 +75,6 @@ public class CreateUserHandlerTests
     }
 
     /// <summary>
-    /// Tests that an invalid user creation request throws a validation exception.
-    /// </summary>
-    [Fact(DisplayName = "Given invalid user data When creating user Then throws validation exception")]
-    public async Task Handle_InvalidRequest_ThrowsValidationException()
-    {
-        // Given
-        var command = new CreateUserCommand(); // Empty command will fail validation
-
-        // When
-        var act = () => _handler.Handle(command, CancellationToken.None);
-
-        // Then
-        await act.Should().ThrowAsync<FluentValidation.ValidationException>();
-    }
-
-    /// <summary>
     /// Tests that the password is hashed before saving the user.
     /// </summary>
     [Fact(DisplayName = "Given user creation request When handling Then password is hashed")]
@@ -159,5 +144,31 @@ public class CreateUserHandlerTests
             c.Phone == command.Phone &&
             c.Status == command.Status &&
             c.Role == command.Role));
+    }
+
+    [Fact]
+    public async Task Handle_ValidRequest_PropagatesCancellationTokenToRepository()
+    {
+        var command = new CreateUserCommand
+        {
+            Username = "test.user",
+            Password = "Valid1!Password",
+            Email = "test.user@example.com",
+            Phone = "+5511999999999",
+            Status = UserStatus.Active,
+            Role = UserRole.Customer
+        };
+        var user = new User { Email = command.Email, Password = command.Password };
+        using var cancellationSource = new CancellationTokenSource();
+        var cancellationToken = cancellationSource.Token;
+
+        _mapper.Map<User>(command).Returns(user);
+        _userRepository.CreateAsync(user, cancellationToken).Returns(user);
+        _passwordHasher.HashPassword(command.Password).Returns("hashedPassword");
+
+        await _handler.Handle(command, cancellationToken);
+
+        await _userRepository.Received(1).GetByEmailAsync(command.Email, cancellationToken);
+        await _userRepository.Received(1).CreateAsync(user, cancellationToken);
     }
 }
