@@ -1,0 +1,45 @@
+name: Open Develop Pull Request
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-pull-request:
+    name: Open pull request to main
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for an existing pull request
+        id: existing-pr
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMATION_TOKEN }}
+        shell: bash
+        run: |
+          PR_NUMBER=$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --base main \
+            --head develop \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Create pull request to main
+        if: steps.existing-pr.outputs.number == ''
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMATION_TOKEN }}
+        shell: bash
+        run: |
+          gh pr create \
+            --repo "${{ github.repository }}" \
+            --base main \
+            --head develop \
+            --title "chore: promote develop to main" \
+            --body "Pull request created automatically from \`develop\` to \`main\`. The merge must be performed manually."

@@ -1,0 +1,47 @@
+name: Open Feature Pull Request
+
+on:
+  push:
+    branches:
+      - "feature/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-pull-request:
+    name: Open pull request to develop
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for an existing pull request
+        id: existing-pr
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMATION_TOKEN }}
+          HEAD_BRANCH: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          PR_NUMBER=$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --base develop \
+            --head "$HEAD_BRANCH" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Create pull request to develop
+        if: steps.existing-pr.outputs.number == ''
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMATION_TOKEN }}
+          HEAD_BRANCH: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          gh pr create \
+            --repo "${{ github.repository }}" \
+            --base develop \
+            --head "$HEAD_BRANCH" \
+            --title "feat: merge $HEAD_BRANCH into develop" \
+            --body "Pull request created automatically from \`$HEAD_BRANCH\` to \`develop\`. The merge must be performed manually."
