@@ -14,7 +14,7 @@ namespace Ambev.DeveloperEvaluation.WebApi;
 
 public class Program
 {
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
         try
         {
@@ -70,11 +70,18 @@ public class Program
 
             app.MapControllers();
 
-            app.Run();
+            await using (var scope = app.Services.CreateAsyncScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<DefaultContext>();
+                await context.Database.MigrateAsync();
+            }
+
+            await app.RunAsync();
         }
         catch (Exception ex)
         {
             Log.Fatal(ex, "Application terminated unexpectedly");
+            throw;
         }
         finally
         {

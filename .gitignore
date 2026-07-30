@@ -6,6 +6,7 @@
 .[eE]ng/[dD]ata/
 
 # User-specific files
+.env
 *.rsuser
 *.suo
 *.user
