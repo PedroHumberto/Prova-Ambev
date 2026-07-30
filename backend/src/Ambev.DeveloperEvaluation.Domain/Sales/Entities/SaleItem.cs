@@ -5,8 +5,6 @@ namespace Ambev.DeveloperEvaluation.Domain.Sales.Entities;
 
 public sealed class SaleItem
 {
-    private const decimal MaximumMonetaryValue = 9999999999999999.99m;
-
     private SaleItem()
     {
     }
@@ -74,10 +72,10 @@ public sealed class SaleItem
             throw new InvalidSaleItemException("Quantity must be between 1 and 20.");
         }
 
-        if (unitPrice <= 0 || unitPrice > MaximumMonetaryValue)
+        if (unitPrice <= 0 || unitPrice > MonetaryConstraints.MaximumValue)
         {
             throw new InvalidSaleItemException(
-                $"Unit price must be between 0.01 and {MaximumMonetaryValue}.");
+                $"Unit price must be between 0.01 and {MonetaryConstraints.MaximumValue}.");
         }
 
         if (GetDecimalScale(unitPrice) > 2)
@@ -181,7 +179,7 @@ public sealed class SaleItem
 
     private static void EnsureStoredRange(decimal value, string valueName)
     {
-        if (value < 0 || value > MaximumMonetaryValue)
+        if (value < 0 || value > MonetaryConstraints.MaximumValue)
         {
             throw new MonetaryValueOutOfRangeException(valueName);
         }

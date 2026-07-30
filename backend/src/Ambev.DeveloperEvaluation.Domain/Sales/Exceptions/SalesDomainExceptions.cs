@@ -72,12 +72,12 @@ public sealed class LastActiveSaleItemException : SalesDomainException
 public sealed class MonetaryValueOutOfRangeException : SalesDomainException
 {
     public MonetaryValueOutOfRangeException(string valueName)
-        : base($"The monetary value '{valueName}' exceeds the numeric(18,2) range.")
+        : base($"The monetary value '{valueName}' exceeds the numeric({MonetaryConstraints.Precision},{MonetaryConstraints.Scale}) range.")
     {
     }
 
     public MonetaryValueOutOfRangeException(string valueName, Exception innerException)
-        : base($"The monetary value '{valueName}' exceeds the numeric(18,2) range.", innerException)
+        : base($"The monetary value '{valueName}' exceeds the numeric({MonetaryConstraints.Precision},{MonetaryConstraints.Scale}) range.", innerException)
     {
     }
 }
