@@ -73,6 +73,7 @@ public sealed class SaleTests
     }
 
     [Theory]
+    [InlineData(-1)]
     [InlineData(0)]
     [InlineData(21)]
     public void Create_QuantityOutsideAllowedRange_ThrowsInvalidSaleItemException(int quantity)
@@ -86,6 +87,22 @@ public sealed class SaleTests
         // Assert
         act.Should().Throw<InvalidSaleItemException>()
             .WithMessage("Quantity must be between 1 and 20.");
+    }
+
+    [Theory]
+    [InlineData(-0.01)]
+    [InlineData(10000000000000000)]
+    public void Create_UnitPriceOutsideAllowedRange_ThrowsInvalidSaleItemException(decimal unitPrice)
+    {
+        // Arrange
+        var input = SaleTestData.Item(unitPrice: unitPrice);
+
+        // Act
+        var act = () => SaleTestData.CreateSale(items: [input]);
+
+        // Assert
+        act.Should().Throw<InvalidSaleItemException>()
+            .WithMessage($"Unit price must be between 0.01 and {9_999_999_999_999_999.99m}.");
     }
 
     [Fact]
@@ -121,6 +138,24 @@ public sealed class SaleTests
     }
 
     [Fact]
+    public void Create_MultipleProducts_SumsRoundedLineTotals()
+    {
+        // Arrange
+        var builder = new SaleBuilder().WithItems(
+            SaleTestData.Item(quantity: 5, unitPrice: 0.01m),
+            SaleTestData.Item(SaleTestData.ProductTwoId, "Product Two", 5, 0.01m));
+
+        // Act
+        var sale = builder.Build();
+
+        // Assert
+        sale.Items.Should().HaveCount(2);
+        sale.Subtotal.Should().Be(0.10m);
+        sale.DiscountAmount.Should().Be(0.02m);
+        sale.TotalAmount.Should().Be(0.08m);
+    }
+
+    [Fact]
     public void AddItem_ValidItem_AddsItemRecalculatesTotalsAndRaisesSaleUpdated()
     {
         // Arrange
@@ -145,6 +180,27 @@ public sealed class SaleTests
     }
 
     [Fact]
+    public void AddItem_DuplicateActiveProduct_ThrowsWithoutChangingAggregate()
+    {
+        // Arrange
+        var sale = SaleTestData.CreateSale();
+        var originalUpdatedAt = sale.UpdatedAt;
+        sale.ClearDomainEvents();
+
+        // Act
+        var act = () => sale.AddItem(SaleTestData.ProductOneId, "Duplicate", 4, 5m);
+
+        // Assert
+        act.Should().Throw<DuplicateActiveProductException>();
+        sale.Items.Should().ContainSingle();
+        sale.Subtotal.Should().Be(10m);
+        sale.DiscountAmount.Should().Be(0m);
+        sale.TotalAmount.Should().Be(10m);
+        sale.UpdatedAt.Should().Be(originalUpdatedAt);
+        sale.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
     public void UpdateItem_QuantityChangesDiscountBand_RecalculatesValuesAndRaisesSaleUpdated()
     {
         // Arrange
@@ -165,6 +221,36 @@ public sealed class SaleTests
         sale.TotalAmount.Should().Be(80m);
         item.UpdatedAt.Should().Be(updatedAt);
         sale.DomainEvents.Should().ContainSingle().Which.Should().Be(new SaleUpdated(sale.Id, updatedAt));
+    }
+
+    [Theory]
+    [InlineData(3, 4, 10, 40, 4, 36)]
+    [InlineData(4, 3, 0, 30, 0, 30)]
+    [InlineData(9, 10, 20, 100, 20, 80)]
+    [InlineData(10, 9, 10, 90, 9, 81)]
+    public void UpdateItem_CrossesAdjacentDiscountBoundary_RecalculatesDiscount(
+        int initialQuantity,
+        int updatedQuantity,
+        int expectedDiscount,
+        int expectedSubtotal,
+        int expectedDiscountAmount,
+        int expectedTotal)
+    {
+        // Arrange
+        var sale = SaleTestData.CreateSale(items: [SaleTestData.Item(quantity: initialQuantity)]);
+        var item = sale.Items.Single();
+
+        // Act
+        sale.UpdateItem(item.Id, item.ProductName, updatedQuantity, item.UnitPrice);
+
+        // Assert
+        item.DiscountPercentage.Should().Be(expectedDiscount);
+        item.Subtotal.Should().Be(expectedSubtotal);
+        item.DiscountAmount.Should().Be(expectedDiscountAmount);
+        item.TotalAmount.Should().Be(expectedTotal);
+        sale.Subtotal.Should().Be(expectedSubtotal);
+        sale.DiscountAmount.Should().Be(expectedDiscountAmount);
+        sale.TotalAmount.Should().Be(expectedTotal);
     }
 
     [Fact]
@@ -193,6 +279,34 @@ public sealed class SaleTests
         sale.TotalAmount.Should().Be(7m);
         sale.DomainEvents.Should().ContainSingle().Which
             .Should().Be(new SaleItemCancelled(sale.Id, cancelledItem.Id, cancelledAt));
+    }
+
+    [Fact]
+    public void CancelItem_CalledTwice_IsIdempotent()
+    {
+        // Arrange
+        var clock = new TestTimeProvider(SaleTestData.CreatedAt);
+        var sale = SaleTestData.CreateSale(
+            clock,
+            SaleTestData.Item(),
+            SaleTestData.Item(SaleTestData.ProductTwoId, "Product Two"));
+        var item = sale.Items.First();
+        sale.ClearDomainEvents();
+        var cancelledAt = SaleTestData.CreatedAt.AddMinutes(1);
+        clock.SetUtcNow(cancelledAt);
+
+        // Act
+        sale.CancelItem(item.Id);
+        clock.SetUtcNow(cancelledAt.AddMinutes(1));
+        sale.CancelItem(item.Id);
+
+        // Assert
+        item.CancelledAt.Should().Be(cancelledAt);
+        item.UpdatedAt.Should().Be(cancelledAt);
+        sale.UpdatedAt.Should().Be(cancelledAt);
+        sale.TotalAmount.Should().Be(10m);
+        sale.DomainEvents.Should().ContainSingle().Which
+            .Should().Be(new SaleItemCancelled(sale.Id, item.Id, cancelledAt));
     }
 
     [Fact]
@@ -313,6 +427,47 @@ public sealed class SaleTests
         first.ProductName.Should().Be("Product One");
         first.Quantity.Should().Be(1);
         sale.Items.Should().OnlyContain(item => item.IsActive);
+        sale.UpdatedAt.Should().Be(originalUpdatedAt);
+        sale.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ReplaceEditableData_DuplicateProduct_ThrowsWithoutChangingAggregate()
+    {
+        // Arrange
+        var sale = SaleTestData.CreateSale(
+            items:
+            [
+                SaleTestData.Item(),
+                SaleTestData.Item(SaleTestData.ProductTwoId, "Product Two")
+            ]);
+        var originalUpdatedAt = sale.UpdatedAt;
+        sale.ClearDomainEvents();
+        var replacements = sale.Items
+            .Select(item => new SaleItemReplacement(
+                item.Id,
+                SaleTestData.ProductOneId,
+                item.ProductName,
+                item.Quantity,
+                item.UnitPrice))
+            .ToArray();
+
+        // Act
+        var act = () => sale.ReplaceEditableData(
+            sale.SaleNumber,
+            sale.SaleDate,
+            sale.CustomerId,
+            sale.CustomerName,
+            sale.BranchId,
+            sale.BranchName,
+            replacements);
+
+        // Assert
+        act.Should().Throw<DuplicateActiveProductException>();
+        sale.Items.Should().OnlyContain(item => item.IsActive);
+        sale.Items.Select(item => item.ProductId).Should().BeEquivalentTo(
+            [SaleTestData.ProductOneId, SaleTestData.ProductTwoId]);
+        sale.TotalAmount.Should().Be(20m);
         sale.UpdatedAt.Should().Be(originalUpdatedAt);
         sale.DomainEvents.Should().BeEmpty();
     }
