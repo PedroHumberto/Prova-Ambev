@@ -157,3 +157,8 @@ Use `!` and a `BREAKING CHANGE:` footer when a commit introduces an incompatible
 ## API Documentation
 
 Swagger is enabled in the Development environment. Additional endpoint references are available under `.doc/` in the repository when working with the complete project materials.
+
+The Sales aggregate is implemented in
+`backend/src/Ambev.DeveloperEvaluation.Domain/Sales`, with domain tests in
+`backend/tests/Ambev.DeveloperEvaluation.Unit/Domain/Sales`. This does not yet
+imply that Sales HTTP endpoints or persistence are implemented.
