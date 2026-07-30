@@ -13,6 +13,7 @@ public class GetUserProfile : Profile
     /// </summary>
     public GetUserProfile()
     {
-        CreateMap<User, GetUserResult>();
+        CreateMap<User, GetUserResult>()
+            .ForMember(destination => destination.Name, options => options.MapFrom(source => source.Username));
     }
 }
