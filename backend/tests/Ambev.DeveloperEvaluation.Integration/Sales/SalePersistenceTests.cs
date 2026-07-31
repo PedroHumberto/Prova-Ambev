@@ -39,10 +39,17 @@ public sealed class SalePersistenceTests(PostgreSqlFixture fixture, ITestOutputH
             """
             SELECT
                 EXISTS (SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260730220544_AddSalesPersistence'),
+                EXISTS (SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260731130350_AddSalesTransactionalOutbox'),
                 EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'citext'),
                 (SELECT udt_name FROM information_schema.columns WHERE table_name = 'Sales' AND column_name = 'SaleNumber'),
                 (SELECT numeric_precision FROM information_schema.columns WHERE table_name = 'SaleItems' AND column_name = 'TotalAmount'),
-                (SELECT numeric_scale FROM information_schema.columns WHERE table_name = 'SaleItems' AND column_name = 'TotalAmount')
+                (SELECT numeric_scale FROM information_schema.columns WHERE table_name = 'SaleItems' AND column_name = 'TotalAmount'),
+                (SELECT udt_name FROM information_schema.columns WHERE table_name = 'OutboxMessages' AND column_name = 'Payload'),
+                EXISTS (
+                    SELECT 1
+                    FROM pg_class index_class
+                    JOIN pg_index index_metadata ON index_metadata.indexrelid = index_class.oid
+                    WHERE index_class.relname = 'IX_OutboxMessages_Pending' AND index_metadata.indisvalid)
             """,
             connection);
         await using var reader = await command.ExecuteReaderAsync();
@@ -50,9 +57,12 @@ public sealed class SalePersistenceTests(PostgreSqlFixture fixture, ITestOutputH
         Assert.True(await reader.ReadAsync());
         Assert.True(reader.GetBoolean(0));
         Assert.True(reader.GetBoolean(1));
-        Assert.Equal("citext", reader.GetString(2));
-        Assert.Equal(18, reader.GetInt32(3));
-        Assert.Equal(2, reader.GetInt32(4));
+        Assert.True(reader.GetBoolean(2));
+        Assert.Equal("citext", reader.GetString(3));
+        Assert.Equal(18, reader.GetInt32(4));
+        Assert.Equal(2, reader.GetInt32(5));
+        Assert.Equal("jsonb", reader.GetString(6));
+        Assert.True(reader.GetBoolean(7));
     }
 
     [Fact]
@@ -68,6 +78,7 @@ public sealed class SalePersistenceTests(PostgreSqlFixture fixture, ITestOutputH
         {
             var migrator = previousContext.GetService<IMigrator>();
             await migrator.MigrateAsync("20260731012348_AlignSalesPagingIndexDirection");
+            sale.ClearDomainEvents();
             await new SaleRepository(previousContext).AddAsync(sale);
             await previousContext.CommitAsync();
             await migrator.MigrateAsync();
