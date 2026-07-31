@@ -58,11 +58,9 @@ public sealed class SaleRepository(DefaultContext context) : ISaleRepository
         var totalCount = await query.CountAsync(cancellationToken);
         var items = await query
             .OrderByDescending(sale => sale.SaleDate)
-            .ThenByDescending(sale => sale.Id)
+            .ThenBy(sale => sale.Id)
             .Skip(offset)
             .Take(pageSize)
-            .Include(sale => sale.Items)
-            .AsSplitQuery()
             .ToListAsync(cancellationToken);
 
         return new SalePage(items, totalCount);

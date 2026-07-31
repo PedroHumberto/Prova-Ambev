@@ -59,6 +59,14 @@ dotnet build Ambev.DeveloperEvaluation.sln --configuration Release --no-restore
 dotnet test Ambev.DeveloperEvaluation.sln --configuration Release --no-build --no-restore
 ```
 
+Current stabilization verification on 2026-07-30: restore succeeded, the Release
+build completed with 0 warnings and 0 errors, 166 unit tests and 11 PostgreSQL
+integration tests passed, and the Functional project remained an empty
+placeholder. The NuGet audit reported no vulnerable packages in any
+PackageReference project. The solution-level audit still exits with code 1 after
+the clean report because `docker-compose.dcproj` uses the unsupported
+`package.config` format.
+
 To generate a coverage report, use `coverage-report.bat` on Windows or `coverage-report.sh` on Linux and macOS.
 
 ## Run with Docker Compose
@@ -159,6 +167,12 @@ Use `!` and a `BREAKING CHANGE:` footer when a commit introduces an incompatible
 Swagger is enabled in the Development environment. Additional endpoint references are available under `.doc/` in the repository when working with the complete project materials.
 
 The Sales aggregate is implemented in
-`backend/src/Ambev.DeveloperEvaluation.Domain/Sales`, with domain tests in
-`backend/tests/Ambev.DeveloperEvaluation.Unit/Domain/Sales`. This does not yet
-imply that Sales HTTP endpoints or persistence are implemented.
+`backend/src/Ambev.DeveloperEvaluation.Domain/Sales`. PostgreSQL persistence,
+EF Core mappings and migrations are implemented under
+`backend/src/Ambev.DeveloperEvaluation.ORM`, and the MediatR use cases through
+TASK-008 are under `backend/src/Ambev.DeveloperEvaluation.Application/Sales`.
+Unit tests and PostgreSQL/Testcontainers integration tests cover these layers.
+
+Sales HTTP endpoints, configurable `_order`, complete filters, functional API
+tests, final observability and the coverage gate remain pending from TASK-009
+onward.

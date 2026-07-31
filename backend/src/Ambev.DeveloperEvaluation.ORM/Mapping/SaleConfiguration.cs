@@ -61,7 +61,7 @@ public sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
             .IsUnique()
             .HasDatabaseName(SaleNumberUniqueIndexName);
         builder.HasIndex(sale => new { sale.SaleDate, sale.Id })
-            .IsDescending()
+            .IsDescending(true, false)
             .HasDatabaseName("IX_Sales_SaleDate_Id");
         builder.HasIndex(sale => sale.CustomerId).HasDatabaseName("IX_Sales_CustomerId");
         builder.HasIndex(sale => sale.BranchId).HasDatabaseName("IX_Sales_BranchId");

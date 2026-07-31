@@ -1,5 +1,6 @@
 using Ambev.DeveloperEvaluation.Application.Common.Exceptions;
 using Ambev.DeveloperEvaluation.Domain.Exceptions;
+using Ambev.DeveloperEvaluation.Domain.Sales.Exceptions;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -39,6 +40,18 @@ public sealed class GlobalExceptionHandler(
             DuplicateUserEmailException => (
                 StatusCodes.Status409Conflict,
                 "Conflict",
+                exception.Message),
+            DuplicateSaleNumberException => (
+                StatusCodes.Status409Conflict,
+                "Conflict",
+                exception.Message),
+            SaleItemNotFoundException => (
+                StatusCodes.Status404NotFound,
+                "Not Found",
+                exception.Message),
+            SalesDomainException => (
+                StatusCodes.Status422UnprocessableEntity,
+                "Unprocessable Entity",
                 exception.Message),
             _ => (
                 StatusCodes.Status500InternalServerError,

@@ -2,7 +2,7 @@ using Ambev.DeveloperEvaluation.Domain.Sales.Enums;
 
 namespace Ambev.DeveloperEvaluation.Application.Sales.Common;
 
-public class SaleResult
+public class SaleSummaryResult
 {
     public Guid Id { get; init; }
     public string SaleNumber { get; init; } = string.Empty;
@@ -18,6 +18,10 @@ public class SaleResult
     public DateTime CreatedAt { get; init; }
     public DateTime UpdatedAt { get; init; }
     public DateTime? CancelledAt { get; init; }
+}
+
+public class SaleResult : SaleSummaryResult
+{
     public IReadOnlyList<SaleItemResult> Items { get; init; } = [];
 }
 

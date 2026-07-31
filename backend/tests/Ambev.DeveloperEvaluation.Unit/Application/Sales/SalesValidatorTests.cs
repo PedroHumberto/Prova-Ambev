@@ -23,6 +23,80 @@ public sealed class CreateSaleCommandValidatorTests
         result.ShouldNotHaveAnyValidationErrors();
     }
 
+    [Fact]
+    public void Validate_TextAtNormalizedLimitsWithOuterSpaces_HasNoErrors()
+    {
+        var command = ApplicationSaleTestData.CreateCommand() with
+        {
+            SaleNumber = $"  {new string('S', 50)}  ",
+            CustomerName = $"  {new string('C', 200)}  ",
+            BranchName = $"  {new string('B', 200)}  ",
+            Items =
+            [
+                ApplicationSaleTestData.CreateCommand().Items.First() with
+                {
+                    ProductName = $"  {new string('P', 200)}  "
+                }
+            ]
+        };
+
+        var result = _validator.TestValidate(command);
+
+        result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public void Validate_TextAboveNormalizedLimits_ReportsEverySnapshotProperty()
+    {
+        var command = ApplicationSaleTestData.CreateCommand() with
+        {
+            SaleNumber = $" {new string('S', 51)} ",
+            CustomerName = $" {new string('C', 201)} ",
+            BranchName = $" {new string('B', 201)} ",
+            Items =
+            [
+                ApplicationSaleTestData.CreateCommand().Items.First() with
+                {
+                    ProductName = $" {new string('P', 201)} "
+                }
+            ]
+        };
+
+        var result = _validator.TestValidate(command);
+
+        result.Errors.Select(error => error.PropertyName).Should().BeEquivalentTo(
+            nameof(command.SaleNumber),
+            nameof(command.CustomerName),
+            nameof(command.BranchName),
+            "Items[0].ProductName");
+    }
+
+    [Fact]
+    public void Validate_WhitespaceOnlyText_ReportsEverySnapshotProperty()
+    {
+        var command = ApplicationSaleTestData.CreateCommand() with
+        {
+            SaleNumber = "   ",
+            CustomerName = "   ",
+            BranchName = "   ",
+            Items =
+            [
+                ApplicationSaleTestData.CreateCommand().Items.First() with
+                {
+                    ProductName = "   "
+                }
+            ]
+        };
+
+        var result = _validator.TestValidate(command);
+
+        result.Errors.Select(error => error.PropertyName).Should().BeEquivalentTo(
+            nameof(command.SaleNumber),
+            nameof(command.CustomerName),
+            nameof(command.BranchName),
+            "Items[0].ProductName");
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -114,6 +188,26 @@ public sealed class UpdateSaleCommandValidatorTests
         var sale = ApplicationSaleTestData.CreateSale();
 
         var result = _validator.TestValidate(ApplicationSaleTestData.CreateUpdateCommand(sale));
+
+        result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public void Validate_TextAtNormalizedLimitsWithOuterSpaces_HasNoErrors()
+    {
+        var sale = ApplicationSaleTestData.CreateSale();
+        var command = ApplicationSaleTestData.CreateUpdateCommand(sale);
+        command = command with
+        {
+            SaleNumber = $"  {new string('S', 50)}  ",
+            CustomerName = $"  {new string('C', 200)}  ",
+            BranchName = $"  {new string('B', 200)}  ",
+            Items = command.Items.Select((item, index) => index == 0
+                ? item with { ProductName = $"  {new string('P', 200)}  " }
+                : item).ToArray()
+        };
+
+        var result = _validator.TestValidate(command);
 
         result.ShouldNotHaveAnyValidationErrors();
     }
