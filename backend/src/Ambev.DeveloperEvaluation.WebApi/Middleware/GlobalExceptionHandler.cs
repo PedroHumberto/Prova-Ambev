@@ -8,8 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Ambev.DeveloperEvaluation.WebApi.Middleware;
 
 public sealed class GlobalExceptionHandler(
-    IProblemDetailsService problemDetailsService,
-    ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
+    IProblemDetailsService problemDetailsService) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
@@ -58,15 +57,6 @@ public sealed class GlobalExceptionHandler(
                 "Internal Server Error",
                 "An unexpected error occurred.")
         };
-
-        if (statusCode == StatusCodes.Status500InternalServerError)
-        {
-            logger.LogError(
-                exception,
-                "Unhandled exception while processing {Method} {Path}",
-                httpContext.Request.Method,
-                httpContext.Request.Path);
-        }
 
         var problemDetails = new ProblemDetails
         {

@@ -78,6 +78,7 @@ public class Program
             builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 
             var app = builder.Build();
+            app.UseDefaultLogging();
             app.UseExceptionHandler();
             app.UseStatusCodePages(async statusCodeContext =>
             {
@@ -115,12 +116,12 @@ public class Program
                 app.UseSwaggerUI();
             }
 
+            app.UseBasicHealthChecks();
+
             app.UseHttpsRedirection();
 
             app.UseAuthentication();
             app.UseAuthorization();
-
-            app.UseBasicHealthChecks();
 
             app.MapControllers();
 
