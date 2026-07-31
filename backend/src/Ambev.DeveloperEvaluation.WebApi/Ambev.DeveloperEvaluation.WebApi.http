@@ -1,6 +1,91 @@
-@Ambev.DeveloperEvaluation.WebApi_HostAddress = http://localhost:5119
+@host = https://localhost:8081
+@email = sales.operator@example.com
+@password = StrongPassword123!
+@saleId = replace-with-sale-id-returned-by-create
+@itemId = replace-with-item-id-returned-by-create
+@token = replace-with-token-returned-by-authentication
 
-GET {{Ambev.DeveloperEvaluation.WebApi_HostAddress}}/weatherforecast/
+### Create an operator once (409 means it already exists)
+POST {{host}}/api/users
+Content-Type: application/json
+
+{
+  "username": "sales.operator",
+  "password": "{{password}}",
+  "phone": "+5511999999999",
+  "email": "{{email}}",
+  "status": 1,
+  "role": 2
+}
+
+### Authenticate, then copy data.token to @token above
+POST {{host}}/api/auth
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Create sale, then copy data.id and data.items[0].id to @saleId and @itemId
+POST {{host}}/api/sales
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "saleNumber": "SALE-HTTP-001",
+  "saleDate": "2026-07-30T12:00:00Z",
+  "customerId": "11111111-1111-1111-1111-111111111111",
+  "customerName": "Example Customer",
+  "branchId": "22222222-2222-2222-2222-222222222222",
+  "branchName": "Main Branch",
+  "items": [
+    {
+      "productId": "33333333-3333-3333-3333-333333333333",
+      "productName": "Example Product",
+      "quantity": 4,
+      "unitPrice": 25.50
+    }
+  ]
+}
+
+### Get sale
+GET {{host}}/api/sales/{{saleId}}
+Authorization: Bearer {{token}}
 Accept: application/json
 
-###
+### List sales (TASK-009 only exposes basic paging)
+GET {{host}}/api/sales?_page=1&_size=10
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Full replacement update (existing item ID preserves that item)
+PUT {{host}}/api/sales/{{saleId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "saleNumber": "SALE-HTTP-001",
+  "saleDate": "2026-07-30T12:00:00Z",
+  "customerId": "11111111-1111-1111-1111-111111111111",
+  "customerName": "Example Customer Updated",
+  "branchId": "22222222-2222-2222-2222-222222222222",
+  "branchName": "Main Branch",
+  "items": [
+    {
+      "id": "{{itemId}}",
+      "productId": "33333333-3333-3333-3333-333333333333",
+      "productName": "Example Product",
+      "quantity": 10,
+      "unitPrice": 25.50
+    }
+  ]
+}
+
+### Cancel one item (idempotent)
+DELETE {{host}}/api/sales/{{saleId}}/items/{{itemId}}
+Authorization: Bearer {{token}}
+
+### Cancel sale (idempotent)
+DELETE {{host}}/api/sales/{{saleId}}
+Authorization: Bearer {{token}}

@@ -169,10 +169,13 @@ Swagger is enabled in the Development environment. Additional endpoint reference
 The Sales aggregate is implemented in
 `backend/src/Ambev.DeveloperEvaluation.Domain/Sales`. PostgreSQL persistence,
 EF Core mappings and migrations are implemented under
-`backend/src/Ambev.DeveloperEvaluation.ORM`, and the MediatR use cases through
-TASK-008 are under `backend/src/Ambev.DeveloperEvaluation.Application/Sales`.
-Unit tests and PostgreSQL/Testcontainers integration tests cover these layers.
+`backend/src/Ambev.DeveloperEvaluation.ORM`, and the MediatR use cases are under
+`backend/src/Ambev.DeveloperEvaluation.Application/Sales`. TASK-009 Sales HTTP
+endpoints, including basic `_page`/`_size` pagination, are implemented under
+`backend/src/Ambev.DeveloperEvaluation.WebApi/Features/Sales`. Unit tests and
+PostgreSQL/Testcontainers integration tests cover these layers, including WebApi
+unit tests.
 
-Sales HTTP endpoints, configurable `_order`, complete filters, functional API
-tests, final observability and the coverage gate remain pending from TASK-009
-onward.
+Configurable `_order` and complete filters remain pending for TASK-010.
+Functional API tests remain pending for TASK-013; final observability and the
+coverage gate remain pending for later tasks.
