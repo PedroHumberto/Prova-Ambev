@@ -4,6 +4,7 @@ using Ambev.DeveloperEvaluation.Domain.Sales.Entities;
 using Ambev.DeveloperEvaluation.Domain.Sales.Enums;
 using Ambev.DeveloperEvaluation.Domain.Sales.Exceptions;
 using Ambev.DeveloperEvaluation.Unit.Application.Sales.TestData;
+using Ambev.DeveloperEvaluation.Unit.TestInfrastructure;
 using AutoMapper;
 using FluentAssertions;
 using NSubstitute;
@@ -41,7 +42,8 @@ public sealed class UpdateSaleHandlerTests
             sale.SaleNumber.Should().Be(command.SaleNumber, "mapping must happen after replacement");
             return expectedResult;
         });
-        var handler = new UpdateSaleHandler(_saleRepository, _unitOfWork, _mapper);
+        var logger = new RecordingLogger<UpdateSaleHandler>();
+        var handler = new UpdateSaleHandler(_saleRepository, _unitOfWork, _mapper, logger);
 
         var result = await handler.Handle(command, requestSource.Token);
 
@@ -58,6 +60,10 @@ public sealed class UpdateSaleHandlerTests
             Arg.Any<Func<CancellationToken, Task<UpdateSaleResult>>>(),
             requestSource.Token);
         await _unitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
+        var log = logger.Entries.Should().ContainSingle().Subject;
+        log.Properties.Keys.Should().BeEquivalentTo("Operation", "SaleId", "{OriginalFormat}");
+        log.Properties["Operation"].Should().Be("UpdateSale");
+        log.Properties["SaleId"].Should().Be(command.Id);
     }
 
     [Fact]
@@ -70,13 +76,35 @@ public sealed class UpdateSaleHandlerTests
             CancellationToken.None,
             CancellationToken.None);
         _saleRepository.GetByIdForUpdateAsync(command.Id, CancellationToken.None).Returns((Sale?)null);
-        var handler = new UpdateSaleHandler(_saleRepository, _unitOfWork, _mapper);
+        var logger = new RecordingLogger<UpdateSaleHandler>();
+        var handler = new UpdateSaleHandler(_saleRepository, _unitOfWork, _mapper, logger);
 
         var action = () => handler.Handle(command, CancellationToken.None);
 
         await action.Should().ThrowAsync<KeyNotFoundException>().WithMessage($"*{command.Id}*");
         _mapper.DidNotReceive().Map<UpdateSaleResult>(Arg.Any<Sale>());
         await _unitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
+        logger.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Handle_TransactionCancellation_PropagatesWithoutLoggingSuccess()
+    {
+        var sale = ApplicationSaleTestData.CreateSale();
+        var command = ApplicationSaleTestData.CreateUpdateCommand(sale);
+        using var cancellationSource = new CancellationTokenSource();
+        cancellationSource.Cancel();
+        _unitOfWork.ExecuteInTransactionAsync(
+                Arg.Any<Func<CancellationToken, Task<UpdateSaleResult>>>(),
+                cancellationSource.Token)
+            .Returns(Task.FromCanceled<UpdateSaleResult>(cancellationSource.Token));
+        var logger = new RecordingLogger<UpdateSaleHandler>();
+        var handler = new UpdateSaleHandler(_saleRepository, _unitOfWork, _mapper, logger);
+
+        var action = () => handler.Handle(command, cancellationSource.Token);
+
+        await action.Should().ThrowAsync<OperationCanceledException>();
+        logger.Entries.Should().BeEmpty();
     }
 
     [Fact]

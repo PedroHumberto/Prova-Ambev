@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
@@ -24,22 +25,6 @@ public static class LoggingExtension
         .WithDefaultDestructurers();
 
     /// <summary>
-    /// A filter predicate to exclude log events with specific criteria.
-    /// </summary>
-    static readonly Func<LogEvent, bool> _filterPredicate = exclusionPredicate =>
-    {
-        if (exclusionPredicate.Level != LogEventLevel.Information) return false;
-
-        exclusionPredicate.Properties.TryGetValue("StatusCode", out var statusCode);
-        exclusionPredicate.Properties.TryGetValue("Path", out var path);
-
-        var excludeByStatusCode = statusCode?.ToString().Equals("200") ?? false;
-        var excludeByPath = path?.ToString().Contains("/health") ?? false;
-
-        return excludeByStatusCode && excludeByPath;
-    };
-
-    /// <summary>
     /// This method configures the logging with commonly used features for DataDog integration.
     /// </summary>
     /// <param name="builder">The <see cref="WebApplicationBuilder" /> to add services to.</param>
@@ -58,25 +43,24 @@ public static class LoggingExtension
                 .Enrich.WithProperty("Environment", builder.Environment.EnvironmentName)
                 .Enrich.WithProperty("Application", builder.Environment.ApplicationName)
                 .Enrich.FromLogContext()
-                .Enrich.WithExceptionDetails(_destructuringOptionsBuilder)
-                .Filter.ByExcluding(_filterPredicate);
+                .Enrich.WithExceptionDetails(_destructuringOptionsBuilder);
 
             if (Debugger.IsAttached)
             {
                 loggerConfiguration.Enrich.WithProperty("DebuggerAttached", Debugger.IsAttached);
-                loggerConfiguration.WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}", theme: SystemConsoleTheme.Colored);
+                loggerConfiguration.WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{SourceContext}] {Message:lj} {Properties:j}{NewLine}{Exception}", theme: SystemConsoleTheme.Colored);
             }
             else
             {
                 loggerConfiguration
                     .WriteTo.Console
                     (
-                        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}"
+                        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext} {Message:lj} {Properties:j}{NewLine}{Exception}"
                     )
                     .WriteTo.File(
                         "logs/log-.txt",
                         rollingInterval: RollingInterval.Day,
-                        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}"
+                        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext} {Message:lj} {Properties:j}{NewLine}{Exception}"
                     );
             }
         });
@@ -91,6 +75,26 @@ public static class LoggingExtension
     /// <returns>The <see cref="WebApplication"/> for Swagger documentation.</returns>
     public static WebApplication UseDefaultLogging(this WebApplication app)
     {
+        app.UseMiddleware<RequestCorrelationMiddleware>();
+        app.UseSerilogRequestLogging(options =>
+        {
+            options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms (CorrelationId: {CorrelationId}, TraceId: {TraceId})";
+            options.GetLevel = (httpContext, _, exception) =>
+            {
+                if (exception is not null || httpContext.Response.StatusCode >= StatusCodes.Status500InternalServerError)
+                    return LogEventLevel.Error;
+
+                return httpContext.Response.StatusCode >= StatusCodes.Status400BadRequest
+                    ? LogEventLevel.Warning
+                    : LogEventLevel.Information;
+            };
+            options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+            {
+                diagnosticContext.Set("CorrelationId", RequestCorrelationMiddleware.GetCorrelationId(httpContext));
+                diagnosticContext.Set("TraceId", RequestCorrelationMiddleware.GetTraceId(httpContext));
+            };
+        });
+
         var logger = app.Services.GetRequiredService<ILogger<Logger>>();
 
         var mode = Debugger.IsAttached ? "Debug" : "Release";

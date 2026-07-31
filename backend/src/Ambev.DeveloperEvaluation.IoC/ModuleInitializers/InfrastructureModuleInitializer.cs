@@ -1,5 +1,6 @@
 ﻿using Ambev.DeveloperEvaluation.Domain.Repositories;
 using Ambev.DeveloperEvaluation.IoC.Messaging;
+using Ambev.DeveloperEvaluation.IoC.HealthChecks;
 using Ambev.DeveloperEvaluation.ORM;
 using Ambev.DeveloperEvaluation.ORM.Outbox;
 using Ambev.DeveloperEvaluation.ORM.Repositories;
@@ -7,6 +8,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Rebus.Config;
 
@@ -23,6 +25,17 @@ public class InfrastructureModuleInitializer : IModuleInitializer
         builder.Services.AddScoped<IOutboxStore, OutboxStore>();
         builder.Services.AddScoped<OutboxDispatcher>();
         builder.Services.AddSingleton(TimeProvider.System);
+
+        builder.Services.AddHealthChecks()
+            .AddDbContextCheck<DefaultContext>(
+                "postgresql",
+                failureStatus: HealthStatus.Unhealthy,
+                tags: ["readiness"])
+            .AddCheck<RabbitMqHealthCheck>(
+                "rabbitmq",
+                failureStatus: HealthStatus.Unhealthy,
+                tags: ["readiness"],
+                timeout: TimeSpan.FromSeconds(5));
 
         builder.Services.AddOptions<SalesMessagingOptions>()
             .Bind(builder.Configuration.GetSection(SalesMessagingOptions.SectionName))
