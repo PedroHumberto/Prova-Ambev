@@ -5,6 +5,7 @@ using Ambev.DeveloperEvaluation.Application.Sales.GetSaleById;
 using Ambev.DeveloperEvaluation.Application.Sales.ListSales;
 using Ambev.DeveloperEvaluation.Application.Sales.UpdateSale;
 using Ambev.DeveloperEvaluation.WebApi.Common;
+using Ambev.DeveloperEvaluation.Domain.Sales.Enums;
 using AutoMapper;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -63,8 +64,20 @@ public sealed class SalesController(IMediator mediator, IMapper mapper) : BaseCo
         });
     }
 
-    /// <summary>Lists sales with deterministic default ordering and basic pagination.</summary>
+    /// <summary>Lists sales using server-side filters, pagination, and deterministic whitelisted ordering.</summary>
     [HttpGet]
+    [StrictQueryParameters(
+        "_page",
+        "_size",
+        "_order",
+        "saleNumber",
+        "saleDateFrom",
+        "saleDateTo",
+        "customerId",
+        "customerName",
+        "branchId",
+        "branchName",
+        "status")]
     [ProducesResponseType(typeof(ApiResponseWithData<ListSalesResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -73,10 +86,20 @@ public sealed class SalesController(IMediator mediator, IMapper mapper) : BaseCo
         [FromQuery] ListSalesRequest request,
         CancellationToken cancellationToken)
     {
+        SaleOrderParser.TryParse(request.Order, out var order);
         var query = new ListSalesQuery
         {
             PageNumber = request.PageNumber,
-            PageSize = request.PageSize
+            PageSize = request.PageSize,
+            SaleNumber = request.SaleNumber,
+            SaleDateFrom = request.SaleDateFrom?.UtcDateTime,
+            SaleDateTo = request.SaleDateTo?.UtcDateTime,
+            CustomerId = request.CustomerId,
+            CustomerName = request.CustomerName,
+            BranchId = request.BranchId,
+            BranchName = request.BranchName,
+            Status = request.Status is null ? null : Enum.Parse<SaleStatus>(request.Status),
+            Order = order
         };
         var result = await mediator.Send(query, cancellationToken);
         return new OkObjectResult(new ApiResponseWithData<ListSalesResponse>

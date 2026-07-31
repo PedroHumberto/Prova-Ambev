@@ -42,9 +42,15 @@ public sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
 
         builder.Property(sale => sale.SaleDate).HasColumnType("timestamp with time zone");
         builder.Property(sale => sale.CustomerId).HasColumnType("uuid");
-        builder.Property(sale => sale.CustomerName).IsRequired().HasMaxLength(200);
+        builder.Property(sale => sale.CustomerName)
+            .IsRequired()
+            .HasMaxLength(200)
+            .HasColumnType("citext");
         builder.Property(sale => sale.BranchId).HasColumnType("uuid");
-        builder.Property(sale => sale.BranchName).IsRequired().HasMaxLength(200);
+        builder.Property(sale => sale.BranchName)
+            .IsRequired()
+            .HasMaxLength(200)
+            .HasColumnType("citext");
         builder.Property(sale => sale.Status)
             .HasConversion<string>()
             .HasMaxLength(20);
@@ -64,7 +70,9 @@ public sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
             .IsDescending(true, false)
             .HasDatabaseName("IX_Sales_SaleDate_Id");
         builder.HasIndex(sale => sale.CustomerId).HasDatabaseName("IX_Sales_CustomerId");
+        builder.HasIndex(sale => sale.CustomerName).HasDatabaseName("IX_Sales_CustomerName");
         builder.HasIndex(sale => sale.BranchId).HasDatabaseName("IX_Sales_BranchId");
+        builder.HasIndex(sale => sale.BranchName).HasDatabaseName("IX_Sales_BranchName");
         builder.HasIndex(sale => sale.Status).HasDatabaseName("IX_Sales_Status");
 
         builder.HasMany(sale => sale.Items)

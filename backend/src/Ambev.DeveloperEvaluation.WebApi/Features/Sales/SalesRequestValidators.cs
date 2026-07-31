@@ -28,7 +28,33 @@ public sealed class ListSalesRequestValidator : AbstractValidator<ListSalesReque
                 || request.PageSize < 1
                 || (long)(request.PageNumber - 1) * request.PageSize <= int.MaxValue)
             .WithMessage("The requested page offset exceeds the supported range.");
+        RuleFor(request => request.Order)
+            .Must(order => SaleOrderParser.TryParse(order, out _))
+            .WithMessage("Order must contain unique whitelisted fields with an optional asc or desc direction.");
+        RuleFor(request => request.SaleDateFrom)
+            .Must(BeUtcWhenSpecified)
+            .WithMessage("Sale date from must be a UTC instant.");
+        RuleFor(request => request.SaleDateTo)
+            .Must(BeUtcWhenSpecified)
+            .WithMessage("Sale date to must be a UTC instant.");
+        RuleFor(request => request)
+            .Must(request => request.SaleDateFrom is null
+                || request.SaleDateTo is null
+                || request.SaleDateFrom <= request.SaleDateTo)
+            .WithMessage("Sale date from must not be later than sale date to.");
+        RuleFor(request => request.Status)
+            .Must(status => status is null or "Active" or "Cancelled")
+            .WithMessage("Status must be Active or Cancelled.");
+        RuleFor(request => request.SaleNumber).Must(BeNonBlankWhenSpecified);
+        RuleFor(request => request.CustomerName).Must(BeNonBlankWhenSpecified);
+        RuleFor(request => request.BranchName).Must(BeNonBlankWhenSpecified);
     }
+
+    private static bool BeUtcWhenSpecified(DateTimeOffset? value) =>
+        value is null || value.Value.Offset == TimeSpan.Zero;
+
+    private static bool BeNonBlankWhenSpecified(string? value) =>
+        value is null || !string.IsNullOrWhiteSpace(value);
 }
 
 public sealed class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
