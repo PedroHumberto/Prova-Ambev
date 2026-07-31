@@ -99,6 +99,34 @@ public sealed class CreateSaleCommandValidatorTests
             "Items[0].ProductName");
     }
 
+    [Fact]
+    public void Validate_NullSnapshotText_ReportsRequiredPropertiesWithoutLengthErrors()
+    {
+        var command = ApplicationSaleTestData.CreateCommand() with
+        {
+            SaleNumber = null!,
+            CustomerName = null!,
+            BranchName = null!,
+            Items =
+            [
+                ApplicationSaleTestData.CreateCommand().Items.First() with
+                {
+                    ProductName = null!
+                }
+            ]
+        };
+
+        var result = _validator.TestValidate(command);
+
+        result.Errors.Should().HaveCount(4);
+        result.Errors.Should().OnlyContain(error => error.ErrorCode == "NotEmptyValidator");
+        result.Errors.Select(error => error.PropertyName).Should().BeEquivalentTo(
+            nameof(command.SaleNumber),
+            nameof(command.CustomerName),
+            nameof(command.BranchName),
+            "Items[0].ProductName");
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

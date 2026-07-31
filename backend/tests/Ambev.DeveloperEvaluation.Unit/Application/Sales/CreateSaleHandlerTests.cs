@@ -5,6 +5,7 @@ using Ambev.DeveloperEvaluation.Unit.Application.Sales.TestData;
 using Ambev.DeveloperEvaluation.Unit.TestInfrastructure;
 using AutoMapper;
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
 
@@ -15,6 +16,26 @@ public sealed class CreateSaleHandlerTests
     private readonly ISaleRepository _saleRepository = Substitute.For<ISaleRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IMapper _mapper = Substitute.For<IMapper>();
+
+    [Theory]
+    [InlineData("saleRepository")]
+    [InlineData("unitOfWork")]
+    [InlineData("mapper")]
+    [InlineData("logger")]
+    public void Constructor_MissingRequiredDependency_ThrowsArgumentNullException(string dependencyName)
+    {
+        var logger = Substitute.For<ILogger<CreateSaleHandler>>();
+        Action action = dependencyName switch
+        {
+            "saleRepository" => () => new CreateSaleHandler(null!, _unitOfWork, _mapper),
+            "unitOfWork" => () => new CreateSaleHandler(_saleRepository, null!, _mapper),
+            "mapper" => () => new CreateSaleHandler(_saleRepository, _unitOfWork, null!),
+            _ => () => new CreateSaleHandler(_saleRepository, _unitOfWork, _mapper, null!)
+        };
+
+        action.Should().Throw<ArgumentNullException>()
+            .Which.ParamName.Should().Be(dependencyName);
+    }
 
     [Fact]
     public async Task Handle_ValidCommand_CreatesMappedSaleInsideTransaction()

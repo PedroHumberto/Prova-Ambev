@@ -14,6 +14,19 @@ public sealed class GetSaleByIdHandlerTests
     private readonly ISaleRepository _saleRepository = Substitute.For<ISaleRepository>();
     private readonly IMapper _mapper = Substitute.For<IMapper>();
 
+    [Theory]
+    [InlineData("saleRepository")]
+    [InlineData("mapper")]
+    public void Constructor_MissingRequiredDependency_ThrowsArgumentNullException(string dependencyName)
+    {
+        Action action = dependencyName == "saleRepository"
+            ? () => new GetSaleByIdHandler(null!, _mapper)
+            : () => new GetSaleByIdHandler(_saleRepository, null!);
+
+        action.Should().Throw<ArgumentNullException>()
+            .Which.ParamName.Should().Be(dependencyName);
+    }
+
     [Fact]
     public async Task Handle_ExistingSale_ReturnsMappedResultAndPropagatesToken()
     {
