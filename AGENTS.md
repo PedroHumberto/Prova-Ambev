@@ -109,7 +109,7 @@ HTTP request
 - Cancellation is logical and idempotent. Cancelled lines retain their values for history but do not contribute to current sale totals.
 - PUT is a complete replacement of editable data. It must call `Sale.ReplaceEditableData` once as an atomic aggregate operation. Omitted active items are cancelled; do not implement replacement by chaining independent header/item mutations.
 - Mutations of an existing sale must execute in a transaction and acquire the repository row lock, loading items only after `SELECT ... FOR UPDATE`. Preserve equivalent serialization if persistence is refactored.
-- Sales domain events currently remain in memory only. There is no dispatcher, handler pipeline, outbox, or event persistence; EF mappings intentionally ignore `DomainEvents`.
+- Sales domain events are mapped to versioned integration contracts and persisted in a transactional PostgreSQL outbox. A leased background dispatcher publishes them through Rebus/RabbitMQ with at-least-once delivery; consumers must deduplicate by the stable `EventId`.
 
 ## Sales Contract Gaps
 
@@ -142,10 +142,10 @@ dotnet ef database update --project src/Ambev.DeveloperEvaluation.ORM --startup-
 - Local API command: `dotnet run --project src/Ambev.DeveloperEvaluation.WebApi`.
 - Default launch URLs are `http://localhost:5119` and `https://localhost:7181`; Swagger is available only in Development.
 - Override configuration with environment variables such as `ConnectionStrings__DefaultConnection` and `Jwt__SecretKey`.
-- `docker compose up --build` starts API, PostgreSQL 13, MongoDB 8, and Redis 7.4.1. Only PostgreSQL is currently integrated into application code; MongoDB and Redis are provisioned but unused.
-- Compose exposes API ports `8080` and `8081`. PostgreSQL, MongoDB, and Redis request dynamically assigned host ports rather than pinning their standard ports.
+- `docker compose up --build` starts API, PostgreSQL 13, RabbitMQ 4.1, MongoDB 8, and Redis 7.4.1. PostgreSQL and RabbitMQ are integrated into application code; MongoDB and Redis remain provisioned but unused.
+- Compose exposes API ports `8080` and `8081`. PostgreSQL, RabbitMQ, MongoDB, and Redis request dynamically assigned host ports rather than pinning their standard ports.
 - HTTPS Compose startup requires `HTTPS_CERT_PASSWORD` and `%APPDATA%/ASP.NET/Https/Ambev.DeveloperEvaluation.WebApi.pfx` on Windows.
-- Health endpoints are `/health`, `/health/live`, and `/health/ready`. Liveness/readiness checks are currently synthetic and do not prove PostgreSQL, Redis, MongoDB, or migration health.
+- Health endpoints are `/health`, `/health/live`, and `/health/ready`. Liveness/readiness checks are currently synthetic and do not prove PostgreSQL, RabbitMQ, Redis, MongoDB, or migration health.
 - Serilog writes structured logs to console and, when no debugger is attached, rolling files under `logs/`. There is no configured OpenTelemetry pipeline or DataDog exporter.
 
 ## Verification

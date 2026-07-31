@@ -2,8 +2,10 @@
 using Ambev.DeveloperEvaluation.Domain.Exceptions;
 using Ambev.DeveloperEvaluation.Domain.Repositories;
 using Ambev.DeveloperEvaluation.Domain.Sales.Entities;
+using Ambev.DeveloperEvaluation.Domain.Sales.Events;
 using Ambev.DeveloperEvaluation.Domain.Sales.Exceptions;
 using Ambev.DeveloperEvaluation.ORM.Mapping;
+using Ambev.DeveloperEvaluation.ORM.Outbox;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
@@ -14,9 +16,14 @@ namespace Ambev.DeveloperEvaluation.ORM;
 
 public class DefaultContext : DbContext, IUnitOfWork
 {
+    private readonly Dictionary<IDomainEvent, OutboxMessage> _capturedDomainEvents =
+        new(ReferenceEqualityComparer.Instance);
+
     public DbSet<User> Users => Set<User>();
 
     public DbSet<Sale> Sales => Set<Sale>();
+
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     public DefaultContext(DbContextOptions<DefaultContext> options) : base(options)
     {
@@ -57,6 +64,24 @@ public class DefaultContext : DbContext, IUnitOfWork
         }
     }
 
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        var capturedSales = CaptureSalesDomainEvents();
+        var result = base.SaveChanges(acceptAllChangesOnSuccess);
+        ClearCapturedDomainEvents(capturedSales);
+        return result;
+    }
+
+    public override async Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        var capturedSales = CaptureSalesDomainEvents();
+        var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        ClearCapturedDomainEvents(capturedSales);
+        return result;
+    }
+
     public async Task<TResult> ExecuteInTransactionAsync<TResult>(
         Func<CancellationToken, Task<TResult>> operation,
         CancellationToken cancellationToken = default)
@@ -86,6 +111,38 @@ public class DefaultContext : DbContext, IUnitOfWork
             SqlState: PostgresErrorCodes.UniqueViolation,
             ConstraintName: SaleConfiguration.SaleNumberUniqueIndexName
         };
+
+    private IReadOnlyCollection<Sale> CaptureSalesDomainEvents()
+    {
+        var capturedSales = ChangeTracker.Entries<Sale>()
+            .Select(entry => entry.Entity)
+            .Where(sale => sale.DomainEvents.Count > 0)
+            .ToArray();
+
+        var createdAt = DateTime.UtcNow;
+        foreach (var domainEvent in capturedSales.SelectMany(sale => sale.DomainEvents))
+        {
+            if (_capturedDomainEvents.ContainsKey(domainEvent))
+                continue;
+
+            var outboxMessage = SalesIntegrationEventMapper.Map(domainEvent, Guid.NewGuid(), createdAt);
+            _capturedDomainEvents.Add(domainEvent, outboxMessage);
+            OutboxMessages.Add(outboxMessage);
+        }
+
+        return capturedSales;
+    }
+
+    private void ClearCapturedDomainEvents(IEnumerable<Sale> sales)
+    {
+        foreach (var sale in sales)
+        {
+            foreach (var domainEvent in sale.DomainEvents)
+                _capturedDomainEvents.Remove(domainEvent);
+
+            sale.ClearDomainEvents();
+        }
+    }
 }
 
 public sealed class DefaultContextFactory : IDesignTimeDbContextFactory<DefaultContext>
