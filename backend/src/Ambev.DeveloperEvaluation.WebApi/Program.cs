@@ -7,18 +7,29 @@ using Ambev.DeveloperEvaluation.IoC;
 using Ambev.DeveloperEvaluation.ORM;
 using Ambev.DeveloperEvaluation.WebApi.Middleware;
 using Ambev.DeveloperEvaluation.WebApi.Swagger;
+using System.Net.Sockets;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using Npgsql;
 using Serilog;
 
 namespace Ambev.DeveloperEvaluation.WebApi;
 
 public class Program
 {
+    private static readonly TimeSpan[] DatabaseMigrationRetryDelays =
+    [
+        TimeSpan.FromSeconds(10),
+        TimeSpan.FromSeconds(30),
+        TimeSpan.FromSeconds(50),
+        TimeSpan.FromSeconds(60),
+        TimeSpan.FromSeconds(90)
+    ];
+
     public static async Task Main(string[] args)
     {
         try
@@ -118,18 +129,18 @@ public class Program
 
             app.UseBasicHealthChecks();
 
-            app.UseHttpsRedirection();
+            if (builder.Configuration.GetValue("HttpsRedirection:Enabled", true))
+                app.UseHttpsRedirection();
 
             app.UseAuthentication();
             app.UseAuthorization();
 
             app.MapControllers();
 
-            await using (var scope = app.Services.CreateAsyncScope())
-            {
-                var context = scope.ServiceProvider.GetRequiredService<DefaultContext>();
-                await context.Database.MigrateAsync();
-            }
+            await MigrateDatabaseWithRetryAsync(
+                app.Services.GetRequiredService<IServiceScopeFactory>(),
+                app.Logger,
+                app.Lifetime.ApplicationStopping);
 
             await app.RunAsync();
         }
@@ -142,5 +153,50 @@ public class Program
         {
             Log.CloseAndFlush();
         }
+    }
+
+    private static async Task MigrateDatabaseWithRetryAsync(
+        IServiceScopeFactory scopeFactory,
+        Microsoft.Extensions.Logging.ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var context = scope.ServiceProvider.GetRequiredService<DefaultContext>();
+                await context.Database.MigrateAsync(cancellationToken);
+
+                if (attempt > 0)
+                    logger.LogInformation("Database migrations completed after {Attempts} attempt(s)", attempt + 1);
+
+                return;
+            }
+            catch (Exception exception) when (IsTransientDatabaseFailure(exception) && attempt < DatabaseMigrationRetryDelays.Length)
+            {
+                var delay = DatabaseMigrationRetryDelays[attempt];
+                logger.LogWarning(
+                    exception,
+                    "Database is not ready. Retrying migrations in {RetryDelaySeconds} seconds (attempt {NextAttempt} of {TotalAttempts})",
+                    delay.TotalSeconds,
+                    attempt + 2,
+                    DatabaseMigrationRetryDelays.Length + 1);
+
+                await Task.Delay(delay, cancellationToken);
+            }
+        }
+    }
+
+    private static bool IsTransientDatabaseFailure(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is NpgsqlException npgsqlException && npgsqlException.IsTransient ||
+                current is SocketException or TimeoutException)
+                return true;
+        }
+
+        return false;
     }
 }
