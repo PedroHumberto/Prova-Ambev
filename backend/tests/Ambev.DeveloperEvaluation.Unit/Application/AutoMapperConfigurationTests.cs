@@ -1,9 +1,14 @@
 using Ambev.DeveloperEvaluation.Application;
 using Ambev.DeveloperEvaluation.Application.Auth.AuthenticateUser;
+using Ambev.DeveloperEvaluation.Application.Sales.CreateSale;
+using Ambev.DeveloperEvaluation.Application.Sales.GetSaleById;
+using Ambev.DeveloperEvaluation.Application.Sales.ListSales;
+using Ambev.DeveloperEvaluation.Application.Sales.UpdateSale;
 using Ambev.DeveloperEvaluation.Application.Users.CreateUser;
 using Ambev.DeveloperEvaluation.Application.Users.GetUser;
 using Ambev.DeveloperEvaluation.Domain.Entities;
 using Ambev.DeveloperEvaluation.Domain.Enums;
+using Ambev.DeveloperEvaluation.Unit.Application.Sales.TestData;
 using Ambev.DeveloperEvaluation.WebApi;
 using Ambev.DeveloperEvaluation.WebApi.Features.Auth.AuthenticateUserFeature;
 using Ambev.DeveloperEvaluation.WebApi.Features.Users.CreateUser;
@@ -108,5 +113,27 @@ public class AutoMapperConfigurationTests
         result.Role.Should().Be(nameof(UserRole.Admin));
         response.Should().BeEquivalentTo(result, options => options.ExcludingMissingMembers());
         response.Token.Should().Be(result.Token);
+    }
+
+    [Fact]
+    public void SaleMappings_ApplicationResults_PreserveAggregateAndNestedItemValues()
+    {
+        var sale = ApplicationSaleTestData.CreateSale();
+
+        var createResult = _mapper.Map<CreateSaleResult>(sale);
+        var getResult = _mapper.Map<GetSaleByIdResult>(sale);
+        var updateResult = _mapper.Map<UpdateSaleResult>(sale);
+        var listResult = _mapper.Map<ListSalesItemResult>(sale);
+
+        createResult.Should().BeEquivalentTo(getResult);
+        updateResult.Should().BeEquivalentTo(getResult);
+        listResult.Should().BeEquivalentTo(getResult);
+        getResult.Id.Should().Be(sale.Id);
+        getResult.SaleNumber.Should().Be(sale.SaleNumber);
+        getResult.Subtotal.Should().Be(sale.Subtotal);
+        getResult.DiscountAmount.Should().Be(sale.DiscountAmount);
+        getResult.TotalAmount.Should().Be(sale.TotalAmount);
+        getResult.Items.Should().HaveCount(sale.Items.Count);
+        getResult.Items.Should().BeEquivalentTo(sale.Items, options => options.ExcludingMissingMembers());
     }
 }
