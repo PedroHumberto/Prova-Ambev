@@ -1,11 +1,12 @@
 # Ambev Developer Evaluation
 
-Backend API for the Ambev Developer Evaluation, built with .NET 8 and PostgreSQL. The solution follows a layered architecture and currently provides user management and authentication as the foundation for the sales domain.
+Backend API for the Ambev Developer Evaluation, built with .NET 8, PostgreSQL, Rebus, and RabbitMQ. The solution follows a layered architecture and provides user management, authentication, and sales.
 
 ## Technology Stack
 
 - .NET 8 and ASP.NET Core Web API
 - PostgreSQL and Entity Framework Core
+- Rebus and RabbitMQ with a transactional PostgreSQL outbox
 - MediatR and AutoMapper
 - FluentValidation
 - JWT authentication
@@ -21,6 +22,7 @@ Backend API for the Ambev Developer Evaluation, built with .NET 8 and PostgreSQL
 |   |-- src/
 |   |   |-- Ambev.DeveloperEvaluation.Application/
 |   |   |-- Ambev.DeveloperEvaluation.Common/
+|   |   |-- Ambev.DeveloperEvaluation.Contracts/
 |   |   |-- Ambev.DeveloperEvaluation.Domain/
 |   |   |-- Ambev.DeveloperEvaluation.IoC/
 |   |   |-- Ambev.DeveloperEvaluation.ORM/
@@ -39,7 +41,7 @@ All .NET and Docker commands in this document must be run from `backend/`.
 
 Choose one of the following environments:
 
-- [.NET SDK 8.0.423](https://dotnet.microsoft.com/download/dotnet/8.0) and PostgreSQL
+- [.NET SDK 8.0.423](https://dotnet.microsoft.com/download/dotnet/8.0), PostgreSQL, and RabbitMQ
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
 The repository-level `global.json` pins the SDK to the installed .NET 8 feature band and permits newer patches in that band. Confirm the selected SDK with:
@@ -86,6 +88,7 @@ The services are then available at:
 - Swagger UI: `https://localhost:8081/swagger`
 - API over HTTP: `http://localhost:8080`
 - Health checks: `http://localhost:8080/health`, `/health/live`, and `/health/ready`
+- RabbitMQ management UI: use the dynamically assigned host port shown by `docker compose ps`
 
 Stop the stack with:
 
@@ -97,12 +100,15 @@ Use `docker compose down --volumes` only when the local database data may be del
 
 ## Run Locally
 
-The API uses PostgreSQL through Npgsql and applies pending migrations during startup. Provide a reachable PostgreSQL connection string because the default value in `appsettings.json` is only a template and is not compatible with Npgsql.
+The API uses PostgreSQL through Npgsql, applies pending migrations during startup,
+and dispatches committed Sales outbox rows through RabbitMQ. Provide reachable
+PostgreSQL and RabbitMQ instances when running outside Compose.
 
 From `backend/`, run:
 
 ```powershell
 $env:ConnectionStrings__DefaultConnection = "Host=localhost;Port=5432;Database=developer_evaluation;Username=developer;Password=your-password"
+$env:SalesMessaging__ConnectionString = "amqp://developer:development@localhost:5672"
 $env:Jwt__SecretKey = "replace-with-a-development-key-at-least-32-bytes-long"
 dotnet run --project src/Ambev.DeveloperEvaluation.WebApi
 ```
@@ -110,6 +116,13 @@ dotnet run --project src/Ambev.DeveloperEvaluation.WebApi
 With the default launch profile, Swagger is available at `http://localhost:5119/swagger` in the Development environment.
 
 Do not commit real credentials. Use environment variables, .NET User Secrets, or a secret manager for local and deployed environments.
+
+Sales integration-event delivery is at least once. Contracts and Rebus headers
+carry a stable `EventId`; consumers must deduplicate with that ID. Publication
+failures remain in the PostgreSQL outbox for unlimited durable retries with
+capped backoff. Only deterministically invalid internal outbox data is retained
+as dead-lettered. Rebus's one-way publisher does not use a RabbitMQ error queue.
+See `doc/architecture/0002-sales-integration-events.md` for details.
 
 ## Database Migrations
 
