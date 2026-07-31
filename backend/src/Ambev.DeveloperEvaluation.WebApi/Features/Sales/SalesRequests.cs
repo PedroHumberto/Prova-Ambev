@@ -16,11 +16,41 @@ public sealed class CancelSaleItemRequest
 
 public sealed class ListSalesRequest
 {
+    /// <summary>One-based page number. Defaults to 1.</summary>
     [FromQuery(Name = "_page")]
     public int PageNumber { get; init; } = 1;
 
+    /// <summary>Page size from 1 through 100. Defaults to 10.</summary>
     [FromQuery(Name = "_size")]
     public int PageSize { get; init; } = 10;
+
+    /// <summary>Comma-separated clauses using a whitelisted field and optional asc/desc direction.</summary>
+    [FromQuery(Name = "_order")]
+    public string? Order { get; init; }
+
+    [FromQuery(Name = "saleNumber")]
+    public string? SaleNumber { get; init; }
+
+    [UtcQueryInstant("saleDateFrom")]
+    public DateTimeOffset? SaleDateFrom { get; init; }
+
+    [UtcQueryInstant("saleDateTo")]
+    public DateTimeOffset? SaleDateTo { get; init; }
+
+    [CanonicalUuidQuery("customerId")]
+    public Guid? CustomerId { get; init; }
+
+    [FromQuery(Name = "customerName")]
+    public string? CustomerName { get; init; }
+
+    [CanonicalUuidQuery("branchId")]
+    public Guid? BranchId { get; init; }
+
+    [FromQuery(Name = "branchName")]
+    public string? BranchName { get; init; }
+
+    [FromQuery(Name = "status")]
+    public string? Status { get; init; }
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

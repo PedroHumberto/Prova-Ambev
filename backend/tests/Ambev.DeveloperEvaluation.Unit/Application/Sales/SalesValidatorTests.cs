@@ -4,6 +4,8 @@ using Ambev.DeveloperEvaluation.Application.Sales.CreateSale;
 using Ambev.DeveloperEvaluation.Application.Sales.GetSaleById;
 using Ambev.DeveloperEvaluation.Application.Sales.ListSales;
 using Ambev.DeveloperEvaluation.Application.Sales.UpdateSale;
+using Ambev.DeveloperEvaluation.Domain.Repositories;
+using Ambev.DeveloperEvaluation.Domain.Sales.Enums;
 using Ambev.DeveloperEvaluation.Unit.Application.Sales.TestData;
 using FluentAssertions;
 using FluentValidation.TestHelper;
@@ -286,6 +288,52 @@ public sealed class ListSalesQueryValidatorTests
     }
 
     [Theory]
+    [InlineData("CustomerId")]
+    [InlineData("BranchId")]
+    public void Validate_NullOptionalId_HasNoErrors(string propertyName)
+    {
+        var query = propertyName == nameof(ListSalesQuery.CustomerId)
+            ? new ListSalesQuery { CustomerId = null }
+            : new ListSalesQuery { BranchId = null };
+
+        var result = _validator.TestValidate(query);
+
+        result.ShouldNotHaveValidationErrorFor(propertyName);
+    }
+
+    [Theory]
+    [InlineData("CustomerId", "Customer ID cannot be empty when specified.")]
+    [InlineData("BranchId", "Branch ID cannot be empty when specified.")]
+    public void Validate_EmptyOptionalId_ReportsExactPropertyAndMessage(
+        string propertyName,
+        string expectedMessage)
+    {
+        var query = propertyName == nameof(ListSalesQuery.CustomerId)
+            ? new ListSalesQuery { CustomerId = Guid.Empty }
+            : new ListSalesQuery { BranchId = Guid.Empty };
+
+        var result = _validator.TestValidate(query);
+
+        result.Errors.Should().ContainSingle(error =>
+            error.PropertyName == propertyName && error.ErrorMessage == expectedMessage);
+    }
+
+    [Theory]
+    [InlineData("CustomerId")]
+    [InlineData("BranchId")]
+    public void Validate_NonEmptyOptionalId_HasNoErrors(string propertyName)
+    {
+        var id = Guid.Parse("abcdef01-2345-6789-abcd-ef0123456789");
+        var query = propertyName == nameof(ListSalesQuery.CustomerId)
+            ? new ListSalesQuery { CustomerId = id }
+            : new ListSalesQuery { BranchId = id };
+
+        var result = _validator.TestValidate(query);
+
+        result.ShouldNotHaveValidationErrorFor(propertyName);
+    }
+
+    [Theory]
     [InlineData(0, 10, "PageNumber")]
     [InlineData(1, 0, "PageSize")]
     [InlineData(1, 101, "PageSize")]
@@ -329,6 +377,108 @@ public sealed class ListSalesQueryValidatorTests
         result.Errors.Should().ContainSingle(error =>
             error.PropertyName == string.Empty
             && error.ErrorMessage == "The requested page offset exceeds the supported range.");
+    }
+
+    [Theory]
+    [InlineData("SaleNumber")]
+    [InlineData("CustomerName")]
+    [InlineData("BranchName")]
+    public void Validate_SpecifiedTextIsBlank_ReportsExactProperty(string propertyName)
+    {
+        var query = propertyName switch
+        {
+            nameof(ListSalesQuery.SaleNumber) => new ListSalesQuery { SaleNumber = "  " },
+            nameof(ListSalesQuery.CustomerName) => new ListSalesQuery { CustomerName = "  " },
+            _ => new ListSalesQuery { BranchName = "  " }
+        };
+
+        var result = _validator.TestValidate(query);
+
+        result.Errors.Should().ContainSingle(error => error.PropertyName == propertyName);
+    }
+
+    [Fact]
+    public void Validate_NonUtcAndReversedDateRange_ReportsBothDatesAndRange()
+    {
+        var query = new ListSalesQuery
+        {
+            SaleDateFrom = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Local),
+            SaleDateTo = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Unspecified)
+        };
+
+        var result = _validator.TestValidate(query);
+
+        result.Errors.Select(error => error.PropertyName).Should().BeEquivalentTo(
+            nameof(query.SaleDateFrom),
+            nameof(query.SaleDateTo),
+            string.Empty);
+    }
+
+    [Fact]
+    public void Validate_UndefinedStatus_ReportsStatus()
+    {
+        var query = new ListSalesQuery { Status = (SaleStatus)999 };
+
+        var result = _validator.TestValidate(query);
+
+        result.ShouldHaveValidationErrorFor(candidate => candidate.Status);
+    }
+
+    [Fact]
+    public void Validate_NullOrder_ReportsOrderWithoutThrowing()
+    {
+        var query = new ListSalesQuery { Order = null! };
+
+        var result = _validator.TestValidate(query);
+
+        result.ShouldHaveValidationErrorFor(candidate => candidate.Order)
+            .WithErrorMessage("Order must not be null.");
+    }
+
+    [Fact]
+    public void Validate_NullOrderElement_ReportsIndexedElementWithoutThrowing()
+    {
+        var query = new ListSalesQuery { Order = [null!] };
+
+        var result = _validator.TestValidate(query);
+
+        result.Errors.Should().ContainSingle(error =>
+            error.PropertyName == "Order[0]"
+            && error.ErrorMessage == "Order clause must not be null.");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Validate_UndefinedOrderEnum_ReportsIndexedProperty(bool invalidField)
+    {
+        var clause = invalidField
+            ? new SaleSortClause((SaleSortField)999, SortDirection.Ascending)
+            : new SaleSortClause(SaleSortField.Id, (SortDirection)999);
+        var query = new ListSalesQuery { Order = [clause] };
+
+        var result = _validator.TestValidate(query);
+
+        result.Errors.Should().ContainSingle(error =>
+            error.PropertyName == (invalidField ? "Order[0].Field" : "Order[0].Direction"));
+    }
+
+    [Fact]
+    public void Validate_DuplicateOrderField_ReportsCollectionRule()
+    {
+        var query = new ListSalesQuery
+        {
+            Order =
+            [
+                new SaleSortClause(SaleSortField.TotalAmount, SortDirection.Ascending),
+                new SaleSortClause(SaleSortField.TotalAmount, SortDirection.Descending)
+            ]
+        };
+
+        var result = _validator.TestValidate(query);
+
+        result.ShouldHaveValidationErrorFor(candidate => candidate.Order)
+            .WithErrorMessage("Order fields must not be repeated.");
     }
 }
 

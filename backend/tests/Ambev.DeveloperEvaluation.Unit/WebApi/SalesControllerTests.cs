@@ -4,6 +4,8 @@ using Ambev.DeveloperEvaluation.Application.Sales.CreateSale;
 using Ambev.DeveloperEvaluation.Application.Sales.GetSaleById;
 using Ambev.DeveloperEvaluation.Application.Sales.ListSales;
 using Ambev.DeveloperEvaluation.Application.Sales.UpdateSale;
+using Ambev.DeveloperEvaluation.Domain.Repositories;
+using Ambev.DeveloperEvaluation.Domain.Sales.Enums;
 using Ambev.DeveloperEvaluation.WebApi.Common;
 using Ambev.DeveloperEvaluation.WebApi.Features.Sales;
 using AutoMapper;
@@ -78,6 +80,65 @@ public sealed class SalesControllerTests
         await _mediator.Received(1).Send(
             Arg.Is<ListSalesQuery>(query => query.PageNumber == 3 && query.PageSize == 25),
             cancellationToken);
+    }
+
+    [Fact]
+    public async Task List_AllFiltersAndOrder_PropagatesCompleteQueryAndReturnsCurrentEnvelope()
+    {
+        var from = new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 7, 31, 23, 59, 59, TimeSpan.Zero);
+        var request = new ListSalesRequest
+        {
+            PageNumber = 4,
+            PageSize = 20,
+            Order = "CUSTOMERNAME DESC,totalAmount,id desc",
+            SaleNumber = " SALE-001 ",
+            SaleDateFrom = from,
+            SaleDateTo = to,
+            CustomerId = CustomerId,
+            CustomerName = " Customer ",
+            BranchId = BranchId,
+            BranchName = " Branch ",
+            Status = "Cancelled"
+        };
+        var result = new ListSalesResult { PageNumber = 4, PageSize = 20, TotalCount = 61, TotalPages = 4 };
+        var response = new ListSalesResponse();
+        using var cancellationSource = new CancellationTokenSource();
+        ListSalesQuery? capturedQuery = null;
+        _mediator.Send(
+                Arg.Do<ListSalesQuery>(query => capturedQuery = query),
+                cancellationSource.Token)
+            .Returns(result);
+        _mapper.Map<ListSalesResponse>(result).Returns(response);
+
+        var actionResult = await CreateController().List(request, cancellationSource.Token);
+
+        capturedQuery.Should().NotBeNull();
+        capturedQuery.Should().BeEquivalentTo(new ListSalesQuery
+        {
+            PageNumber = 4,
+            PageSize = 20,
+            SaleNumber = request.SaleNumber,
+            SaleDateFrom = from.UtcDateTime,
+            SaleDateTo = to.UtcDateTime,
+            CustomerId = CustomerId,
+            CustomerName = request.CustomerName,
+            BranchId = BranchId,
+            BranchName = request.BranchName,
+            Status = SaleStatus.Cancelled,
+            Order = new[]
+            {
+                new SaleSortClause(SaleSortField.CustomerName, SortDirection.Descending),
+                new SaleSortClause(SaleSortField.TotalAmount, SortDirection.Ascending),
+                new SaleSortClause(SaleSortField.Id, SortDirection.Descending)
+            }
+        });
+        var ok = actionResult.Should().BeOfType<OkObjectResult>().Subject;
+        var envelope = ok.Value.Should().BeOfType<ApiResponseWithData<ListSalesResponse>>().Subject;
+        envelope.Success.Should().BeTrue();
+        envelope.Message.Should().Be("Sales retrieved successfully");
+        envelope.Data.Should().BeSameAs(response);
+        await _mediator.Received(1).Send(Arg.Any<ListSalesQuery>(), cancellationSource.Token);
     }
 
     [Fact]

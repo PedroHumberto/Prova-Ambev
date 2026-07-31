@@ -11,8 +11,7 @@ public interface ISaleRepository
     Task<Sale?> GetByIdForUpdateAsync(Guid id, CancellationToken cancellationToken = default);
 
     Task<SalePage> GetPageAsync(
-        int pageNumber,
-        int pageSize,
+        SaleQueryCriteria criteria,
         CancellationToken cancellationToken = default);
 }
 
