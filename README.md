@@ -39,10 +39,10 @@ All .NET and Docker commands in this document must be run from `backend/`.
 
 ## Prerequisites
 
-Choose one of the following environments:
-
-- [.NET SDK 8.0.423](https://dotnet.microsoft.com/download/dotnet/8.0), PostgreSQL, and RabbitMQ
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+Install [.NET SDK 8.0.423](https://dotnet.microsoft.com/download/dotnet/8.0).
+[Docker Desktop](https://www.docker.com/products/docker-desktop/) must also be
+running for the Integration and Functional test projects, which provision real
+PostgreSQL and RabbitMQ dependencies with Testcontainers.
 
 The repository-level `global.json` pins the SDK to the installed .NET 8 feature band and permits newer patches in that band. Confirm the selected SDK with:
 
@@ -61,13 +61,11 @@ dotnet build Ambev.DeveloperEvaluation.sln --configuration Release --no-restore
 dotnet test Ambev.DeveloperEvaluation.sln --configuration Release --no-build --no-restore
 ```
 
-Current stabilization verification on 2026-07-30: restore succeeded, the Release
-build completed with 0 warnings and 0 errors, 166 unit tests and 11 PostgreSQL
-integration tests passed, and the Functional project remained an empty
-placeholder. The NuGet audit reported no vulnerable packages in any
-PackageReference project. The solution-level audit still exits with code 1 after
-the clean report because `docker-compose.dcproj` uses the unsupported
-`package.config` format.
+Current verification on 2026-07-31: restore and the Release build succeeded, and
+all 335 Unit, Integration, and Functional tests passed. Functional tests run the
+real HTTP pipeline through `WebApplicationFactory`, JWT authentication, and a
+PostgreSQL Testcontainer. The command sequence above is the single supported way
+to validate the complete solution.
 
 To generate a coverage report, use `coverage-report.bat` on Windows or `coverage-report.sh` on Linux and macOS.
 
@@ -189,5 +187,6 @@ including filtered pagination and deterministic whitelisted ordering, are implem
 PostgreSQL/Testcontainers integration tests cover these layers, including WebApi
 unit tests.
 
-Functional API tests remain pending for TASK-013; final observability and the
-coverage gate remain pending for later tasks.
+Functional API tests cover users, authentication, the complete Sales lifecycle,
+query behavior, authorization, and error contracts. The coverage gate remains
+pending for TASK-014.
