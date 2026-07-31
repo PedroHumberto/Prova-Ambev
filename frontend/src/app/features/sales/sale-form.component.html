@@ -1,0 +1,60 @@
+<section class="page-heading">
+    <div><a class="back-link" routerLink="/sales">← Voltar para vendas</a>
+        <p class="eyebrow">{{ editMode ? 'EDIÇÃO' : 'NOVA OPERAÇÃO' }}</p>
+        <h1>{{ editMode ? 'Editar venda' : 'Registrar venda' }}</h1>
+        <p class="page-subtitle">{{ editMode ? 'Atualize os dados editáveis da venda.' : 'Registre uma nova venda na
+            operação.' }}</p>
+    </div>
+</section>@if (message()) { <app-toast [message]="message()" [error]="true" /> }<form class="sale-form"
+    [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <section class="panel form-panel">
+        <div class="panel-title">
+            <div>
+                <h2>Dados da venda</h2>
+                <p>Identificação e contexto da operação.</p>
+            </div>
+        </div>
+        <div class="form-grid">
+            <div><label for="saleNumber">Número da venda</label><input id="saleNumber" formControlName="saleNumber"
+                    placeholder="Ex.: VEN-2026-001"><small class="field-error">{{ errorFor('saleNumber') }}</small>
+            </div>
+            <div><label for="saleDate">Data da venda</label><input id="saleDate" type="datetime-local"
+                    formControlName="saleDate"><small class="field-error">{{ errorFor('saleDate') }}</small></div>
+            <div><label for="customerId">ID do cliente</label><input id="customerId" formControlName="customerId"
+                    placeholder="UUID"><small class="field-error">{{ errorFor('customerId') }}</small></div>
+            <div><label for="customerName">Nome do cliente</label><input id="customerName"
+                    formControlName="customerName" placeholder="Nome completo"><small class="field-error">{{
+                    errorFor('customerName') }}</small></div>
+            <div><label for="branchId">ID da filial</label><input id="branchId" formControlName="branchId"
+                    placeholder="UUID"><small class="field-error">{{ errorFor('branchId') }}</small></div>
+            <div><label for="branchName">Nome da filial</label><input id="branchName" formControlName="branchName"
+                    placeholder="Ex.: Centro de distribuição"><small class="field-error">{{ errorFor('branchName')
+                    }}</small></div>
+        </div>
+    </section>
+    <section class="panel form-panel">
+        <div class="panel-title">
+            <div>
+                <h2>Itens</h2>
+                <p>Quantidade entre 1 e 20. O desconto é calculado pelo servidor.</p>
+            </div><button type="button" class="button button-ghost" (click)="addItem()">＋ Adicionar item</button>
+        </div>
+        <div class="items-editor" formArrayName="items">@for (item of items.controls; track item; let index = $index) {
+            <div class="item-editor" [formGroupName]="index">
+                <div class="item-index">{{ (index + 1).toString().padStart(2, '0') }}</div>
+                <div><label [for]="'productId' + index">Produto ID</label><input [id]="'productId' + index"
+                        formControlName="productId" placeholder="UUID"></div>
+                <div><label [for]="'productName' + index">Produto</label><input [id]="'productName' + index"
+                        formControlName="productName" placeholder="Nome do produto"></div>
+                <div><label [for]="'quantity' + index">Qtd.</label><input [id]="'quantity' + index" type="number"
+                        min="1" max="20" formControlName="quantity"></div>
+                <div><label [for]="'unitPrice' + index">Preço unit.</label><input [id]="'unitPrice' + index"
+                        type="number" min="0.01" step="0.01" formControlName="unitPrice"></div><button type="button"
+                    class="icon-button remove-item" [disabled]="items.length === 1" (click)="removeItem(index)"
+                    [attr.aria-label]="'Remover item ' + (index + 1)">×</button>
+            </div>}</div>
+    </section>
+    <div class="form-actions"><a class="button button-ghost" routerLink="/sales">Descartar</a><button
+            class="button button-primary" type="submit" [disabled]="loading()">{{ loading() ? 'Salvando...' : (editMode
+            ? 'Salvar alterações' : 'Registrar venda') }} <span>→</span></button></div>
+</form>
