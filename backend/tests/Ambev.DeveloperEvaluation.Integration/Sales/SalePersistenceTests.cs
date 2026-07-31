@@ -11,14 +11,17 @@ using Ambev.DeveloperEvaluation.ORM.Repositories;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Ambev.DeveloperEvaluation.Integration.Sales;
 
 [Collection(PostgreSqlCollection.Name)]
-public sealed class SalePersistenceTests(PostgreSqlFixture fixture)
+public sealed class SalePersistenceTests(PostgreSqlFixture fixture, ITestOutputHelper output)
 {
     private static readonly DateTime BaseDate = new(2026, 7, 30, 12, 0, 0, DateTimeKind.Utc);
 
@@ -50,6 +53,62 @@ public sealed class SalePersistenceTests(PostgreSqlFixture fixture)
         Assert.Equal("citext", reader.GetString(2));
         Assert.Equal(18, reader.GetInt32(3));
         Assert.Equal(2, reader.GetInt32(4));
+    }
+
+    [Fact]
+    public async Task MigrateAsync_PreviousSchemaWithSale_PreservesNamesAndCreatesValidCitextIndexes()
+    {
+        await using var database = await fixture.CreateDatabaseAsync(migrate: false);
+        var sale = CreateSale(
+            "MIGRATION-PRESERVATION",
+            BaseDate,
+            customerName: "Café Customer%_Snapshot",
+            branchName: "Agência Branch%_Snapshot");
+        await using (var previousContext = database.CreateContext())
+        {
+            var migrator = previousContext.GetService<IMigrator>();
+            await migrator.MigrateAsync("20260731012348_AlignSalesPagingIndexDirection");
+            await new SaleRepository(previousContext).AddAsync(sale);
+            await previousContext.CommitAsync();
+            await migrator.MigrateAsync();
+        }
+
+        await using var connection = new NpgsqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT
+                (SELECT datcollate FROM pg_database WHERE datname = current_database()),
+                (SELECT udt_name FROM information_schema.columns WHERE table_name = 'Sales' AND column_name = 'CustomerName'),
+                (SELECT udt_name FROM information_schema.columns WHERE table_name = 'Sales' AND column_name = 'BranchName'),
+                EXISTS (
+                    SELECT 1
+                    FROM pg_class index_class
+                    JOIN pg_index index_metadata ON index_metadata.indexrelid = index_class.oid
+                    WHERE index_class.relname = 'IX_Sales_CustomerName' AND index_metadata.indisvalid),
+                EXISTS (
+                    SELECT 1
+                    FROM pg_class index_class
+                    JOIN pg_index index_metadata ON index_metadata.indexrelid = index_class.oid
+                    WHERE index_class.relname = 'IX_Sales_BranchName' AND index_metadata.indisvalid),
+                "CustomerName",
+                "BranchName"
+            FROM "Sales"
+            WHERE "Id" = @sale_id
+            """,
+            connection);
+        command.Parameters.AddWithValue("sale_id", sale.Id);
+        await using var reader = await command.ExecuteReaderAsync();
+
+        Assert.True(await reader.ReadAsync());
+        output.WriteLine("PostgreSQL lc_collate: {0}", reader.GetString(0));
+        Assert.Equal("citext", reader.GetString(1));
+        Assert.Equal("citext", reader.GetString(2));
+        Assert.True(reader.GetBoolean(3));
+        Assert.True(reader.GetBoolean(4));
+        Assert.Equal("Café Customer%_Snapshot", reader.GetString(5));
+        Assert.Equal("Agência Branch%_Snapshot", reader.GetString(6));
+        Assert.False(await reader.ReadAsync());
     }
 
     [Fact]
@@ -194,12 +253,16 @@ public sealed class SalePersistenceTests(PostgreSqlFixture fixture)
         var commands = new CommandCaptureInterceptor();
         await using var readContext = database.CreateContext(commands);
         var readRepository = new SaleRepository(readContext);
-        var firstPage = await readRepository.GetPageAsync(1, 2);
-        var secondPage = await readRepository.GetPageAsync(2, 2);
-        var thirdPage = await readRepository.GetPageAsync(3, 2);
-        var repeatedFirstPage = await readRepository.GetPageAsync(1, 2);
-        var repeatedSecondPage = await readRepository.GetPageAsync(2, 2);
-        var expectedIds = sales.OrderBy(sale => sale.Id).Select(sale => sale.Id).ToArray();
+        var firstPage = await readRepository.GetPageAsync(new SaleQueryCriteria { PageNumber = 1, PageSize = 2 });
+        var secondPage = await readRepository.GetPageAsync(new SaleQueryCriteria { PageNumber = 2, PageSize = 2 });
+        var thirdPage = await readRepository.GetPageAsync(new SaleQueryCriteria { PageNumber = 3, PageSize = 2 });
+        var repeatedFirstPage = await readRepository.GetPageAsync(new SaleQueryCriteria { PageNumber = 1, PageSize = 2 });
+        var repeatedSecondPage = await readRepository.GetPageAsync(new SaleQueryCriteria { PageNumber = 2, PageSize = 2 });
+        var expectedIds = sales
+            .OrderByDescending(sale => sale.SaleDate)
+            .ThenBy(sale => sale.Id)
+            .Select(sale => sale.Id)
+            .ToArray();
         var pagedIds = firstPage.Items
             .Concat(secondPage.Items)
             .Concat(thirdPage.Items)
@@ -222,6 +285,187 @@ public sealed class SalePersistenceTests(PostgreSqlFixture fixture)
             && sql.Contains("LIMIT", StringComparison.Ordinal)
             && sql.Contains("OFFSET", StringComparison.Ordinal)
             && !sql.Contains("\"SaleItems\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GetPageAsync_EachFilterAndCombinedCriteria_UsesInclusiveExactPostgreSqlFiltering()
+    {
+        await using var database = await fixture.CreateDatabaseAsync();
+        var customerId = Guid.Parse("11111111-1111-1111-1111-111111111101");
+        var branchId = Guid.Parse("22222222-2222-2222-2222-222222222201");
+        var exact = CreateSale(
+            "Literal%_Sale",
+            BaseDate,
+            customerId,
+            "Customer%_Snapshot",
+            branchId,
+            "Branch%_Snapshot");
+        var before = CreateSale(
+            "BEFORE",
+            BaseDate.AddDays(-1),
+            Guid.Parse("11111111-1111-1111-1111-111111111102"),
+            "Before customer",
+            Guid.Parse("22222222-2222-2222-2222-222222222202"),
+            "Before branch");
+        var cancelled = CreateSale(
+            "CANCELLED",
+            BaseDate.AddDays(1),
+            Guid.Parse("11111111-1111-1111-1111-111111111103"),
+            "Cancelled customer",
+            Guid.Parse("22222222-2222-2222-2222-222222222203"),
+            "Cancelled branch");
+        cancelled.Cancel();
+        var wildcardLookalike = CreateSale(
+            "LiteralXXSale",
+            BaseDate.AddHours(1),
+            Guid.Parse("11111111-1111-1111-1111-111111111104"),
+            "CustomerXXSnapshot",
+            Guid.Parse("22222222-2222-2222-2222-222222222204"),
+            "BranchXXSnapshot");
+        var unicode = CreateSale(
+            "UNICODE",
+            BaseDate.AddHours(2),
+            customerName: "Café Customer",
+            branchName: "Agência Branch");
+        await using (var writeContext = database.CreateContext())
+        {
+            var repository = new SaleRepository(writeContext);
+            foreach (var sale in new[] { exact, before, cancelled, wildcardLookalike, unicode })
+                await repository.AddAsync(sale);
+            await writeContext.CommitAsync();
+        }
+
+        var commands = new CommandCaptureInterceptor();
+        await using var readContext = database.CreateContext(commands);
+        var readRepository = new SaleRepository(readContext);
+        var isolatedFilters = new (SaleQueryCriteria Criteria, Guid[] ExpectedIds)[]
+        {
+            (Criteria(saleNumber: "literal%_sale"), [exact.Id]),
+            (Criteria(saleDateFrom: BaseDate), [exact.Id, cancelled.Id, wildcardLookalike.Id, unicode.Id]),
+            (Criteria(saleDateTo: BaseDate), [exact.Id, before.Id]),
+            (Criteria(customerId: customerId), [exact.Id]),
+            (Criteria(customerName: "customer%_snapshot"), [exact.Id]),
+            (Criteria(branchId: branchId), [exact.Id]),
+            (Criteria(branchName: "branch%_snapshot"), [exact.Id]),
+            (Criteria(customerName: "CAFÉ CUSTOMER"), [unicode.Id]),
+            (Criteria(branchName: "AGÊNCIA BRANCH"), [unicode.Id]),
+            (Criteria(status: SaleStatus.Cancelled), [cancelled.Id])
+        };
+
+        foreach (var (criteria, expectedIds) in isolatedFilters)
+        {
+            var page = await readRepository.GetPageAsync(criteria);
+            Assert.Equal(expectedIds.Length, page.TotalCount);
+            Assert.Equal(
+                expectedIds.OrderBy(id => id),
+                page.Items.Select(sale => sale.Id).OrderBy(id => id));
+        }
+
+        var combined = await readRepository.GetPageAsync(new SaleQueryCriteria
+        {
+            PageNumber = 1,
+            PageSize = 10,
+            SaleNumber = "literal%_sale",
+            SaleDateFrom = BaseDate,
+            SaleDateTo = BaseDate,
+            CustomerId = customerId,
+            CustomerName = "customer%_snapshot",
+            BranchId = branchId,
+            BranchName = "branch%_snapshot",
+            Status = SaleStatus.Active
+        });
+
+        Assert.Equal(1, combined.TotalCount);
+        Assert.Equal(exact.Id, Assert.Single(combined.Items).Id);
+        Assert.All(isolatedFilters.SelectMany(filter => filter.ExpectedIds), id => Assert.NotEqual(Guid.Empty, id));
+        Assert.All(
+            (await readRepository.GetPageAsync(Criteria(customerName: "customer%_snapshot"))).Items,
+            sale => Assert.Empty(sale.Items));
+        Assert.Empty(readContext.ChangeTracker.Entries());
+        Assert.Contains(commands.Commands, sql =>
+            sql.Contains("count(*)", StringComparison.OrdinalIgnoreCase)
+            && sql.Contains("s.\"CustomerName\" =", StringComparison.Ordinal)
+            && !sql.Contains("lower(", StringComparison.OrdinalIgnoreCase)
+            && !sql.Contains("LIKE", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(commands.Commands, sql =>
+            sql.Contains("s.\"BranchName\" =", StringComparison.Ordinal)
+            && sql.Contains("LIMIT", StringComparison.Ordinal)
+            && !sql.Contains("\"SaleItems\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GetPageAsync_FilteredPageBeyondLast_ReturnsEmptyItemsAndFilteredTotal()
+    {
+        await using var database = await fixture.CreateDatabaseAsync();
+        await using (var writeContext = database.CreateContext())
+        {
+            var repository = new SaleRepository(writeContext);
+            await repository.AddAsync(CreateSale("FILTERED-1", BaseDate));
+            await repository.AddAsync(CreateSale("FILTERED-2", BaseDate.AddHours(1)));
+            await repository.AddAsync(CreateSale("OUTSIDE", BaseDate.AddDays(-1)));
+            await writeContext.CommitAsync();
+        }
+
+        await using var readContext = database.CreateContext();
+        var page = await new SaleRepository(readContext).GetPageAsync(new SaleQueryCriteria
+        {
+            PageNumber = 3,
+            PageSize = 1,
+            SaleDateFrom = BaseDate
+        });
+
+        Assert.Equal(2, page.TotalCount);
+        Assert.Empty(page.Items);
+    }
+
+    [Fact]
+    public async Task GetPageAsync_DefaultAndCustomOrder_AreDeterministicWithIdTieBreaker()
+    {
+        await using var database = await fixture.CreateDatabaseAsync();
+        var oldest = CreateSale("ORDER-OLDEST", BaseDate.AddDays(-1), customerName: "Zulu");
+        var tieA = CreateSale("ORDER-TIE-A", BaseDate, customerName: "Same customer");
+        var tieB = CreateSale("ORDER-TIE-B", BaseDate, customerName: "Same customer");
+        var alpha = CreateSale("ORDER-ALPHA", BaseDate.AddDays(1), customerName: "Alpha");
+        var sales = new[] { oldest, tieA, tieB, alpha };
+        await using (var writeContext = database.CreateContext())
+        {
+            var writeRepository = new SaleRepository(writeContext);
+            foreach (var sale in sales)
+                await writeRepository.AddAsync(sale);
+            await writeContext.CommitAsync();
+        }
+
+        var commands = new CommandCaptureInterceptor();
+        await using var readContext = database.CreateContext(commands);
+        var repository = new SaleRepository(readContext);
+        var defaultPage = await repository.GetPageAsync(Criteria());
+        var customPage = await repository.GetPageAsync(new SaleQueryCriteria
+        {
+            PageNumber = 1,
+            PageSize = 10,
+            Order = [new SaleSortClause(SaleSortField.CustomerName, SortDirection.Descending)]
+        });
+        var explicitIdDescending = await repository.GetPageAsync(new SaleQueryCriteria
+        {
+            PageNumber = 1,
+            PageSize = 10,
+            Order = [new SaleSortClause(SaleSortField.Id, SortDirection.Descending)]
+        });
+
+        Assert.Equal(
+            sales.OrderByDescending(sale => sale.SaleDate).ThenBy(sale => sale.Id).Select(sale => sale.Id),
+            defaultPage.Items.Select(sale => sale.Id));
+        Assert.Equal(
+            sales.OrderByDescending(sale => sale.CustomerName).ThenBy(sale => sale.Id).Select(sale => sale.Id),
+            customPage.Items.Select(sale => sale.Id));
+        Assert.Equal(
+            sales.OrderByDescending(sale => sale.Id).Select(sale => sale.Id),
+            explicitIdDescending.Items.Select(sale => sale.Id));
+        Assert.Contains(commands.Commands, sql =>
+            sql.Contains("ORDER BY s.\"CustomerName\" DESC, s.\"Id\"", StringComparison.Ordinal));
+        Assert.Contains(commands.Commands, sql =>
+            sql.Contains("ORDER BY s.\"Id\" DESC", StringComparison.Ordinal)
+            && !sql.Contains("s.\"Id\" DESC, s.\"Id\"", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -391,13 +635,41 @@ public sealed class SalePersistenceTests(PostgreSqlFixture fixture)
         Assert.IsType<SaleRepository>(repository);
     }
 
-    private static Sale CreateSale(string number, DateTime saleDate) => Sale.Create(
+    private static SaleQueryCriteria Criteria(
+        string? saleNumber = null,
+        DateTime? saleDateFrom = null,
+        DateTime? saleDateTo = null,
+        Guid? customerId = null,
+        string? customerName = null,
+        Guid? branchId = null,
+        string? branchName = null,
+        SaleStatus? status = null) => new()
+        {
+            PageNumber = 1,
+            PageSize = 10,
+            SaleNumber = saleNumber,
+            SaleDateFrom = saleDateFrom,
+            SaleDateTo = saleDateTo,
+            CustomerId = customerId,
+            CustomerName = customerName,
+            BranchId = branchId,
+            BranchName = branchName,
+            Status = status
+        };
+
+    private static Sale CreateSale(
+        string number,
+        DateTime saleDate,
+        Guid? customerId = null,
+        string customerName = "Customer snapshot",
+        Guid? branchId = null,
+        string branchName = "Branch snapshot") => Sale.Create(
         number,
         saleDate,
-        Guid.Parse("11111111-1111-1111-1111-111111111111"),
-        "Customer snapshot",
-        Guid.Parse("22222222-2222-2222-2222-222222222222"),
-        "Branch snapshot",
+        customerId ?? Guid.Parse("11111111-1111-1111-1111-111111111111"),
+        customerName,
+        branchId ?? Guid.Parse("22222222-2222-2222-2222-222222222222"),
+        branchName,
         [
             new SaleItemInput(Guid.NewGuid(), "Product without discount", 3, 10.25m),
             new SaleItemInput(Guid.NewGuid(), "Product with discount", 10, 100.00m)

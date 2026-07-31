@@ -170,12 +170,11 @@ The Sales aggregate is implemented in
 `backend/src/Ambev.DeveloperEvaluation.Domain/Sales`. PostgreSQL persistence,
 EF Core mappings and migrations are implemented under
 `backend/src/Ambev.DeveloperEvaluation.ORM`, and the MediatR use cases are under
-`backend/src/Ambev.DeveloperEvaluation.Application/Sales`. TASK-009 Sales HTTP
-endpoints, including basic `_page`/`_size` pagination, are implemented under
+`backend/src/Ambev.DeveloperEvaluation.Application/Sales`. Sales HTTP endpoints,
+including filtered pagination and deterministic whitelisted ordering, are implemented under
 `backend/src/Ambev.DeveloperEvaluation.WebApi/Features/Sales`. Unit tests and
 PostgreSQL/Testcontainers integration tests cover these layers, including WebApi
 unit tests.
 
-Configurable `_order` and complete filters remain pending for TASK-010.
 Functional API tests remain pending for TASK-013; final observability and the
 coverage gate remain pending for later tasks.
