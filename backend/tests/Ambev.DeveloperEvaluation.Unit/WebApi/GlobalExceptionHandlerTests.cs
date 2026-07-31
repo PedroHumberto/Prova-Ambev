@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Ambev.DeveloperEvaluation.Application.Common.Exceptions;
 using Ambev.DeveloperEvaluation.Domain.Exceptions;
+using Ambev.DeveloperEvaluation.Domain.Sales.Exceptions;
 using Ambev.DeveloperEvaluation.WebApi.Middleware;
 using FluentAssertions;
 using FluentValidation;
@@ -46,6 +47,30 @@ public class GlobalExceptionHandlerTests
             StatusCodes.Status409Conflict,
             "Conflict",
             "User with email concurrent.user@example.com already exists"
+        },
+        {
+            new DuplicateSaleNumberException("SALE-001"),
+            StatusCodes.Status409Conflict,
+            "Conflict",
+            "A sale with number 'SALE-001' already exists."
+        },
+        {
+            new SaleItemNotFoundException(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")),
+            StatusCodes.Status404NotFound,
+            "Not Found",
+            "Sale item 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' does not belong to the sale."
+        },
+        {
+            new LastActiveSaleItemException(),
+            StatusCodes.Status422UnprocessableEntity,
+            "Unprocessable Entity",
+            "The last active sale item cannot be cancelled. Cancel the sale instead."
+        },
+        {
+            new InvalidSaleException("Invalid aggregate state."),
+            StatusCodes.Status422UnprocessableEntity,
+            "Unprocessable Entity",
+            "Invalid aggregate state."
         },
         {
             new InvalidOperationException("Sensitive internal detail"),

@@ -11,4 +11,4 @@ public sealed class ListSalesResult
     public int TotalPages { get; init; }
 }
 
-public sealed class ListSalesItemResult : SaleResult;
+public sealed class ListSalesItemResult : SaleSummaryResult;

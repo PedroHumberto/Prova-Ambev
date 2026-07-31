@@ -177,26 +177,51 @@ public sealed class SalePersistenceTests(PostgreSqlFixture fixture)
     public async Task GetPageAsync_SecondPage_UsesStableServerSidePagingAndNoTracking()
     {
         await using var database = await fixture.CreateDatabaseAsync();
+        var sales = new List<Sale>();
         await using (var writeContext = database.CreateContext())
         {
-            var repository = new SaleRepository(writeContext);
+            var writeRepository = new SaleRepository(writeContext);
             for (var index = 0; index < 5; index++)
-                await repository.AddAsync(CreateSale($"PAGE-{index}", BaseDate.AddDays(index)));
+            {
+                var sale = CreateSale($"PAGE-{index}", BaseDate);
+                sales.Add(sale);
+                await writeRepository.AddAsync(sale);
+            }
+
             await writeContext.CommitAsync();
         }
 
         var commands = new CommandCaptureInterceptor();
         await using var readContext = database.CreateContext(commands);
-        var page = await new SaleRepository(readContext).GetPageAsync(2, 2);
+        var readRepository = new SaleRepository(readContext);
+        var firstPage = await readRepository.GetPageAsync(1, 2);
+        var secondPage = await readRepository.GetPageAsync(2, 2);
+        var thirdPage = await readRepository.GetPageAsync(3, 2);
+        var repeatedFirstPage = await readRepository.GetPageAsync(1, 2);
+        var repeatedSecondPage = await readRepository.GetPageAsync(2, 2);
+        var expectedIds = sales.OrderBy(sale => sale.Id).Select(sale => sale.Id).ToArray();
+        var pagedIds = firstPage.Items
+            .Concat(secondPage.Items)
+            .Concat(thirdPage.Items)
+            .Select(sale => sale.Id)
+            .ToArray();
 
-        Assert.Equal(5, page.TotalCount);
-        Assert.Equal(["PAGE-2", "PAGE-1"], page.Items.Select(item => item.SaleNumber));
-        Assert.All(page.Items, sale => Assert.Equal(2, sale.Items.Count));
+        Assert.Equal(5, firstPage.TotalCount);
+        Assert.Equal(5, secondPage.TotalCount);
+        Assert.Equal(5, thirdPage.TotalCount);
+        Assert.Equal(expectedIds, pagedIds);
+        Assert.Equal(firstPage.Items.Select(sale => sale.Id), repeatedFirstPage.Items.Select(sale => sale.Id));
+        Assert.Equal(secondPage.Items.Select(sale => sale.Id), repeatedSecondPage.Items.Select(sale => sale.Id));
+        Assert.All(
+            firstPage.Items.Concat(secondPage.Items).Concat(thirdPage.Items),
+            sale => Assert.Empty(sale.Items));
         Assert.Empty(readContext.ChangeTracker.Entries());
         Assert.Contains(commands.Commands, sql =>
-            sql.Contains("ORDER BY s.\"SaleDate\" DESC, s.\"Id\" DESC", StringComparison.Ordinal)
+            sql.Contains("ORDER BY s.\"SaleDate\" DESC, s.\"Id\"", StringComparison.Ordinal)
+            && !sql.Contains("s.\"Id\" DESC", StringComparison.Ordinal)
             && sql.Contains("LIMIT", StringComparison.Ordinal)
-            && sql.Contains("OFFSET", StringComparison.Ordinal));
+            && sql.Contains("OFFSET", StringComparison.Ordinal)
+            && !sql.Contains("\"SaleItems\"", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -244,6 +269,106 @@ public sealed class SalePersistenceTests(PostgreSqlFixture fixture)
         var postgresException = Assert.IsType<PostgresException>(exception.InnerException);
         Assert.Equal(PostgresErrorCodes.LockNotAvailable, postgresException.SqlState);
         await firstTransaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task ConcurrentItemCancellations_SecondWaitsAndEvaluatesCommittedStateWithoutPartialChanges()
+    {
+        await using var database = await fixture.CreateDatabaseAsync();
+        var sale = CreateSale("CONCURRENT-CANCEL", BaseDate);
+        var firstItemId = sale.Items.First().Id;
+        var secondItemId = sale.Items.Last().Id;
+        await using (var setupContext = database.CreateContext())
+        {
+            await new SaleRepository(setupContext).AddAsync(sale);
+            await setupContext.CommitAsync();
+        }
+
+        await using var firstContext = database.CreateContext();
+        await using var secondContext = database.CreateContext();
+        var firstHasLock = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondAttemptsLock = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirst = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task<bool>? firstMutation = null;
+        Task<bool>? secondMutation = null;
+
+        try
+        {
+            firstMutation = firstContext.ExecuteInTransactionAsync(async cancellationToken =>
+            {
+                var lockedSale = await new SaleRepository(firstContext)
+                    .GetByIdForUpdateAsync(sale.Id, cancellationToken);
+                Assert.NotNull(lockedSale);
+                lockedSale.CancelItem(firstItemId);
+                firstHasLock.TrySetResult(((NpgsqlConnection)firstContext.Database.GetDbConnection()).ProcessID);
+                await releaseFirst.Task.WaitAsync(cancellationToken);
+                return true;
+            });
+
+            var firstProcessId = await firstHasLock.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            secondMutation = secondContext.ExecuteInTransactionAsync(async cancellationToken =>
+            {
+                secondAttemptsLock.TrySetResult(
+                    ((NpgsqlConnection)secondContext.Database.GetDbConnection()).ProcessID);
+                var lockedSale = await new SaleRepository(secondContext)
+                    .GetByIdForUpdateAsync(sale.Id, cancellationToken);
+                Assert.NotNull(lockedSale);
+                lockedSale.CancelItem(secondItemId);
+                return true;
+            });
+
+            var secondProcessId = await secondAttemptsLock.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(await WaitUntilBlockedAsync(
+                database.ConnectionString,
+                blockedProcessId: secondProcessId,
+                blockingProcessId: firstProcessId));
+            Assert.False(secondMutation.IsCompleted);
+
+            releaseFirst.TrySetResult(true);
+            Assert.True(await firstMutation);
+            await Assert.ThrowsAsync<LastActiveSaleItemException>(() => secondMutation);
+        }
+        finally
+        {
+            releaseFirst.TrySetResult(true);
+            if (firstMutation is not null)
+            {
+                try
+                {
+                    await firstMutation;
+                }
+                catch
+                {
+                    // Preserve the assertion that originally failed.
+                }
+            }
+
+            if (secondMutation is not null)
+            {
+                try
+                {
+                    await secondMutation;
+                }
+                catch
+                {
+                    // The expected second mutation failure is asserted above.
+                }
+            }
+        }
+
+        await using var verificationContext = database.CreateContext();
+        var persisted = await new SaleRepository(verificationContext).GetByIdAsync(sale.Id);
+        Assert.NotNull(persisted);
+        var cancelledItem = Assert.Single(persisted.Items, item => item.Id == firstItemId);
+        var activeItem = Assert.Single(persisted.Items, item => item.Id == secondItemId);
+        Assert.Equal(SaleStatus.Cancelled, cancelledItem.Status);
+        Assert.NotNull(cancelledItem.CancelledAt);
+        Assert.Equal(SaleStatus.Active, activeItem.Status);
+        Assert.Null(activeItem.CancelledAt);
+        Assert.Single(persisted.Items, item => item.IsActive);
+        Assert.Equal(activeItem.Subtotal, persisted.Subtotal);
+        Assert.Equal(activeItem.DiscountAmount, persisted.DiscountAmount);
+        Assert.Equal(activeItem.TotalAmount, persisted.TotalAmount);
     }
 
     [Fact]
@@ -296,6 +421,31 @@ public sealed class SalePersistenceTests(PostgreSqlFixture fixture)
                 ({{Guid.NewGuid()}}, {{saleId}}, {{productId}}, {{"Raw product"}}, {{1}}, {{10m}},
                  {{0}}, {{10m}}, {{0m}}, {{10m}}, {{status.ToString()}}, {{now}}, {{now}}, {{cancelledAt}})
             """);
+    }
+
+    private static async Task<bool> WaitUntilBlockedAsync(
+        string connectionString,
+        int blockedProcessId,
+        int blockingProcessId)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+
+        while (DateTime.UtcNow < deadline)
+        {
+            await using var command = new NpgsqlCommand(
+                "SELECT @blocking_process_id = ANY(pg_blocking_pids(@blocked_process_id))",
+                connection);
+            command.Parameters.AddWithValue("blocking_process_id", blockingProcessId);
+            command.Parameters.AddWithValue("blocked_process_id", blockedProcessId);
+            if (await command.ExecuteScalarAsync() is true)
+                return true;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(25));
+        }
+
+        return false;
     }
 
     private sealed class FixedTimeProvider(DateTime utcNow) : TimeProvider

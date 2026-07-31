@@ -6,7 +6,6 @@ using Serilog.Core;
 using Serilog.Events;
 using Serilog.Exceptions;
 using Serilog.Exceptions.Core;
-using Serilog.Exceptions.EntityFrameworkCore.Destructurers;
 using Serilog.Sinks.SystemConsole.Themes;
 using Serilog.Templates;
 using System.Diagnostics;
@@ -19,11 +18,10 @@ namespace Ambev.DeveloperEvaluation.Common.Logging;
 public static class LoggingExtension
 {
     /// <summary>
-    /// The destructuring options builder configured with default destructurers and a custom DbUpdateExceptionDestructurer.
+    /// The destructuring options builder configured with the default exception destructurers.
     /// </summary>
     static readonly DestructuringOptionsBuilder _destructuringOptionsBuilder = new DestructuringOptionsBuilder()
-        .WithDefaultDestructurers()
-        .WithDestructurers([new DbUpdateExceptionDestructurer()]);
+        .WithDefaultDestructurers();
 
     /// <summary>
     /// A filter predicate to exclude log events with specific criteria.

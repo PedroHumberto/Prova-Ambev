@@ -41,6 +41,68 @@ public sealed class SaleTests
             .Which.Should().Be(new SaleCreated(sale.Id, SaleTestData.CreatedAt));
     }
 
+    [Fact]
+    public void Create_TextAtNormalizedLimitsWithOuterSpaces_AcceptsAndStoresTrimmedValues()
+    {
+        var saleNumber = new string('S', 50);
+        var customerName = new string('C', 200);
+        var branchName = new string('B', 200);
+        var productName = new string('P', 200);
+
+        var sale = Sale.Create(
+            $"  {saleNumber}  ",
+            SaleTestData.SaleDate,
+            SaleTestData.CustomerId,
+            $"  {customerName}  ",
+            SaleTestData.BranchId,
+            $"  {branchName}  ",
+            [SaleTestData.Item(productName: $"  {productName}  ")],
+            new TestTimeProvider(SaleTestData.CreatedAt));
+
+        sale.SaleNumber.Should().Be(saleNumber);
+        sale.CustomerName.Should().Be(customerName);
+        sale.BranchName.Should().Be(branchName);
+        sale.Items.Single().ProductName.Should().Be(productName);
+    }
+
+    [Fact]
+    public void Create_TextAboveNormalizedLimits_RejectsEverySnapshotField()
+    {
+        var validItem = SaleTestData.Item();
+
+        var actions = new Action[]
+        {
+            () => Sale.Create(
+                $" {new string('S', 51)} ",
+                SaleTestData.SaleDate,
+                SaleTestData.CustomerId,
+                "Customer",
+                SaleTestData.BranchId,
+                "Branch",
+                [validItem]),
+            () => Sale.Create(
+                "SALE-001",
+                SaleTestData.SaleDate,
+                SaleTestData.CustomerId,
+                $" {new string('C', 201)} ",
+                SaleTestData.BranchId,
+                "Branch",
+                [validItem]),
+            () => Sale.Create(
+                "SALE-001",
+                SaleTestData.SaleDate,
+                SaleTestData.CustomerId,
+                "Customer",
+                SaleTestData.BranchId,
+                $" {new string('B', 201)} ",
+                [validItem]),
+            () => SaleTestData.CreateSale(
+                items: [SaleTestData.Item(productName: $" {new string('P', 201)} ")])
+        };
+
+        actions.Should().AllSatisfy(action => action.Should().Throw<SalesDomainException>());
+    }
+
     [Theory]
     [InlineData(1, 0, 10, 0, 10)]
     [InlineData(3, 0, 30, 0, 30)]
@@ -421,7 +483,7 @@ public sealed class SaleTests
             replacements);
 
         // Assert
-        act.Should().Throw<SaleItemNotFoundException>();
+        act.Should().Throw<InvalidSaleItemException>();
         sale.SaleNumber.Should().Be("SALE-2026-0001");
         sale.CustomerName.Should().Be("Customer One");
         first.ProductName.Should().Be("Product One");

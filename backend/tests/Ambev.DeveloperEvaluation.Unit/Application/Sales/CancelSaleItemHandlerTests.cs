@@ -89,7 +89,7 @@ public sealed class CancelSaleItemHandlerTests
     }
 
     [Fact]
-    public async Task Handle_UnknownItem_PropagatesDomainFailureWithoutCommitOutsideTransaction()
+    public async Task Handle_UnknownItem_PropagatesNotFoundFailureWithoutCommitOutsideTransaction()
     {
         var sale = ApplicationSaleTestData.CreateSale();
         var unknownItemId = Guid.Parse("50000000-0000-0000-0000-000000000001");
