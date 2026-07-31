@@ -9,8 +9,10 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
+using Serilog.Configuration;
 using Serilog.Core;
 using Serilog.Events;
 using Xunit;
@@ -92,7 +94,11 @@ public sealed class RequestLoggingTests
         await using var app = CreateApplication(sink);
         await app.StartAsync();
         using var client = app.GetTestClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/exception");
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/exception")
+        {
+            Content = new StringContent(BodySentinel, Encoding.UTF8, "application/json")
+        };
+        request.Headers.TryAddWithoutValidation("Authorization", AuthorizationSentinel);
         request.Headers.Add(RequestCorrelationMiddleware.CorrelationHeaderName, CorrelationId);
 
         using var response = await client.SendAsync(request);
@@ -111,12 +117,14 @@ public sealed class RequestLoggingTests
         Assert.Equal(LogEventLevel.Error, exceptionLog.Level);
         Assert.IsType<InvalidOperationException>(exceptionLog.Exception);
         Assert.False(string.IsNullOrWhiteSpace(exceptionLog.Exception.StackTrace));
-        var eventId = Assert.IsType<StructureValue>(exceptionLog.Properties["EventId"]);
-        Assert.Equal(1, eventId.Properties.Single(property => property.Name == "Id").Value.LiteralValue());
         Assert.Equal(
-            "UnhandledException",
-            eventId.Properties.Single(property => property.Name == "Name").Value.LiteralValue());
+            typeof(GlobalExceptionHandler).FullName,
+            exceptionLog.Properties["SourceContext"].LiteralValue());
+        Assert.Equal(StatusCodes.Status500InternalServerError, exceptionLog.Properties["StatusCode"].LiteralValue());
+        Assert.Equal("POST", exceptionLog.Properties["RequestMethod"].LiteralValue());
+        Assert.Equal("/exception", exceptionLog.Properties["RequestPath"].LiteralValue());
         Assert.Equal(CorrelationId, exceptionLog.Properties["CorrelationId"].LiteralValue());
+        Assert.DoesNotContain(sink.Events, IsFrameworkUnhandledException);
 
         var completion = Assert.Single(sink.Events, IsRequestCompletion);
         Assert.NotSame(exceptionLog, completion);
@@ -124,11 +132,16 @@ public sealed class RequestLoggingTests
         Assert.Equal(LogEventLevel.Error, completion.Level);
         Assert.Equal(StatusCodes.Status500InternalServerError, completion.Properties["StatusCode"].LiteralValue());
         Assert.True(Convert.ToDouble(completion.Properties["Elapsed"].LiteralValue()) >= 0);
-        Assert.Equal("GET", completion.Properties["RequestMethod"].LiteralValue());
+        Assert.Equal("POST", completion.Properties["RequestMethod"].LiteralValue());
         Assert.Equal("/exception", completion.Properties["RequestPath"].LiteralValue());
         Assert.Equal(CorrelationId, completion.Properties["CorrelationId"].LiteralValue());
         Assert.False(string.IsNullOrWhiteSpace(completion.Properties["TraceId"].LiteralValue()?.ToString()));
         Assert.Equal(completion.Properties["TraceId"].LiteralValue(), exceptionLog.Properties["TraceId"].LiteralValue());
+        var serializedLogs = string.Join(
+            Environment.NewLine,
+            sink.Events.Select(logEvent => logEvent.RenderMessage() + string.Join(" ", logEvent.Properties.Values)));
+        Assert.DoesNotContain(AuthorizationSentinel, serializedLogs, StringComparison.Ordinal);
+        Assert.DoesNotContain(BodySentinel, serializedLogs, StringComparison.Ordinal);
     }
 
     private static WebApplication CreateApplication(CollectingSink sink)
@@ -138,13 +151,16 @@ public sealed class RequestLoggingTests
             EnvironmentName = "Testing"
         });
         builder.WebHost.UseTestServer();
+        RequestLoggingSinkRegistry.Current = sink;
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Serilog:Using:0"] = typeof(RequestLoggingSinkConfigurationExtensions).Assembly.GetName().Name,
+            ["Serilog:MinimumLevel:Default"] = "Verbose",
+            ["Serilog:WriteTo:0:Name"] = "RequestLoggingTestSink"
+        });
         builder.AddDefaultLogging();
         builder.Services.AddProblemDetails();
         builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-        builder.Host.UseSerilog((_, configuration) => configuration
-            .MinimumLevel.Verbose()
-            .Enrich.FromLogContext()
-            .WriteTo.Sink(sink));
         var app = builder.Build();
         app.UseDefaultLogging();
         app.UseExceptionHandler();
@@ -165,12 +181,35 @@ public sealed class RequestLoggingTests
         logEvent.Properties.ContainsKey("CorrelationId") &&
         logEvent.Properties.ContainsKey("TraceId");
 
+    private static bool IsFrameworkUnhandledException(LogEvent logEvent) =>
+        logEvent.Properties.TryGetValue("SourceContext", out var sourceContext) &&
+        Equals(sourceContext.LiteralValue(), "Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware") &&
+        logEvent.Properties.TryGetValue("EventId", out var eventId) &&
+        eventId is StructureValue eventIdStructure &&
+        eventIdStructure.Properties.Any(property =>
+            property.Name == "Id" && Equals(property.Value.LiteralValue(), 1)) &&
+        eventIdStructure.Properties.Any(property =>
+            property.Name == "Name" && Equals(property.Value.LiteralValue(), "UnhandledException"));
+
     private sealed class CollectingSink : ILogEventSink
     {
         public ConcurrentQueue<LogEvent> Events { get; } = new();
 
         public void Emit(LogEvent logEvent) => Events.Enqueue(logEvent);
     }
+}
+
+internal static class RequestLoggingSinkRegistry
+{
+    public static ILogEventSink? Current { get; set; }
+}
+
+public static class RequestLoggingSinkConfigurationExtensions
+{
+    public static LoggerConfiguration RequestLoggingTestSink(
+        this LoggerSinkConfiguration sinkConfiguration) =>
+        sinkConfiguration.Sink(RequestLoggingSinkRegistry.Current ??
+            throw new InvalidOperationException("The request logging test sink was not configured."));
 }
 
 internal static class LogEventPropertyValueExtensions

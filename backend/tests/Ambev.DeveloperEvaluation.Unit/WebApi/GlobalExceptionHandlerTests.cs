@@ -2,6 +2,7 @@ using System.Text.Json;
 using Ambev.DeveloperEvaluation.Application.Common.Exceptions;
 using Ambev.DeveloperEvaluation.Domain.Exceptions;
 using Ambev.DeveloperEvaluation.Domain.Sales.Exceptions;
+using Ambev.DeveloperEvaluation.Unit.TestInfrastructure;
 using Ambev.DeveloperEvaluation.WebApi.Middleware;
 using FluentAssertions;
 using FluentValidation;
@@ -9,6 +10,7 @@ using FluentValidation.Results;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Ambev.DeveloperEvaluation.Unit.WebApi;
@@ -89,7 +91,9 @@ public class GlobalExceptionHandlerTests
     {
         await using var provider = CreateServices();
         var context = CreateHttpContext(provider);
-        var handler = new GlobalExceptionHandler(provider.GetRequiredService<IProblemDetailsService>());
+        var handler = new GlobalExceptionHandler(
+            provider.GetRequiredService<IProblemDetailsService>(),
+            new RecordingLogger<GlobalExceptionHandler>());
 
         var handled = await handler.TryHandleAsync(context, exception, CancellationToken.None);
 
@@ -115,14 +119,65 @@ public class GlobalExceptionHandlerTests
     }
 
     [Fact]
-    public async Task TryHandleAsync_RequestCancellation_DoesNotHandleOrWriteResponse()
+    public async Task TryHandleAsync_ExpectedFailure_LogsStructuredWarningWithoutExceptionOrSensitiveMessage()
+    {
+        const string sensitiveMessage = "token-sentinel-do-not-log";
+        await using var provider = CreateServices();
+        var context = CreateHttpContext(provider);
+        var logger = new RecordingLogger<GlobalExceptionHandler>();
+        var handler = new GlobalExceptionHandler(
+            provider.GetRequiredService<IProblemDetailsService>(),
+            logger);
+
+        await handler.TryHandleAsync(
+            context,
+            new UnauthorizedAccessException(sensitiveMessage),
+            CancellationToken.None);
+
+        var entry = logger.Entries.Should().ContainSingle().Subject;
+        entry.Level.Should().Be(LogLevel.Warning);
+        entry.Exception.Should().BeNull();
+        entry.Properties["StatusCode"].Should().Be(StatusCodes.Status401Unauthorized);
+        entry.Properties["ExceptionType"].Should().Be(typeof(UnauthorizedAccessException).FullName);
+        entry.Properties["RequestMethod"].Should().Be("GET");
+        entry.Properties["RequestPath"].Should().BeEquivalentTo(context.Request.Path);
+        entry.Message.Should().NotContain(sensitiveMessage);
+        entry.Properties.Values.Select(value => value?.ToString()).Should().NotContain(sensitiveMessage);
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_UnexpectedFailure_LogsStructuredErrorWithOriginalException()
+    {
+        await using var provider = CreateServices();
+        var context = CreateHttpContext(provider);
+        var logger = new RecordingLogger<GlobalExceptionHandler>();
+        var handler = new GlobalExceptionHandler(
+            provider.GetRequiredService<IProblemDetailsService>(),
+            logger);
+        var exception = new InvalidOperationException("Sensitive internal detail");
+
+        await handler.TryHandleAsync(context, exception, CancellationToken.None);
+
+        var entry = logger.Entries.Should().ContainSingle().Subject;
+        entry.Level.Should().Be(LogLevel.Error);
+        entry.Exception.Should().BeSameAs(exception);
+        entry.Properties["StatusCode"].Should().Be(StatusCodes.Status500InternalServerError);
+        entry.Properties["RequestMethod"].Should().Be("GET");
+        entry.Properties["RequestPath"].Should().BeEquivalentTo(context.Request.Path);
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_RequestCancellation_DoesNotHandleWriteOrLog()
     {
         await using var provider = CreateServices();
         using var cancellationSource = new CancellationTokenSource();
         cancellationSource.Cancel();
         var context = CreateHttpContext(provider);
         context.RequestAborted = cancellationSource.Token;
-        var handler = new GlobalExceptionHandler(provider.GetRequiredService<IProblemDetailsService>());
+        var logger = new RecordingLogger<GlobalExceptionHandler>();
+        var handler = new GlobalExceptionHandler(
+            provider.GetRequiredService<IProblemDetailsService>(),
+            logger);
 
         var handled = await handler.TryHandleAsync(
             context,
@@ -131,6 +186,7 @@ public class GlobalExceptionHandlerTests
 
         handled.Should().BeFalse();
         context.Response.Body.Length.Should().Be(0);
+        logger.Entries.Should().BeEmpty();
     }
 
     private static ServiceProvider CreateServices()

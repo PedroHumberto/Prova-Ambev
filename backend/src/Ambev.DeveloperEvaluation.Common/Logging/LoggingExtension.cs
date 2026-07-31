@@ -18,6 +18,11 @@ namespace Ambev.DeveloperEvaluation.Common.Logging;
 /// <summary> Add default Logging configuration to project. This configuration supports Serilog logs with DataDog compatible output.</summary>
 public static class LoggingExtension
 {
+    private const string ExceptionHandlerMiddlewareSourceContext =
+        "Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware";
+    private const int UnhandledExceptionEventId = 1;
+    private const string UnhandledExceptionEventName = "UnhandledException";
+
     /// <summary>
     /// The destructuring options builder configured with the default exception destructurers.
     /// </summary>
@@ -43,7 +48,8 @@ public static class LoggingExtension
                 .Enrich.WithProperty("Environment", builder.Environment.EnvironmentName)
                 .Enrich.WithProperty("Application", builder.Environment.ApplicationName)
                 .Enrich.FromLogContext()
-                .Enrich.WithExceptionDetails(_destructuringOptionsBuilder);
+                .Enrich.WithExceptionDetails(_destructuringOptionsBuilder)
+                .Filter.ByExcluding(IsDuplicateExceptionHandlerLog);
 
             if (Debugger.IsAttached)
             {
@@ -101,5 +107,29 @@ public static class LoggingExtension
         logger.LogInformation("Logging enabled for '{Application}' on '{Environment}' - Mode: {Mode}", app.Environment.ApplicationName, app.Environment.EnvironmentName, mode);
         return app;
 
+    }
+
+    private static bool IsDuplicateExceptionHandlerLog(LogEvent logEvent)
+    {
+        if (!logEvent.Properties.TryGetValue("SourceContext", out var sourceContext) ||
+            sourceContext is not ScalarValue { Value: ExceptionHandlerMiddlewareSourceContext })
+        {
+            return false;
+        }
+
+        if (!logEvent.Properties.TryGetValue("EventId", out var eventId) ||
+            eventId is not StructureValue eventIdStructure)
+        {
+            return false;
+        }
+
+        var idMatches = eventIdStructure.Properties.Any(property =>
+            property.Name == "Id" &&
+            property.Value is ScalarValue { Value: UnhandledExceptionEventId });
+        var nameMatches = eventIdStructure.Properties.Any(property =>
+            property.Name == "Name" &&
+            property.Value is ScalarValue { Value: UnhandledExceptionEventName });
+
+        return idMatches && nameMatches;
     }
 }
