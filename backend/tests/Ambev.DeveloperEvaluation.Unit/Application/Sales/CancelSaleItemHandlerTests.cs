@@ -5,6 +5,7 @@ using Ambev.DeveloperEvaluation.Domain.Sales.Enums;
 using Ambev.DeveloperEvaluation.Domain.Sales.Events;
 using Ambev.DeveloperEvaluation.Domain.Sales.Exceptions;
 using Ambev.DeveloperEvaluation.Unit.Application.Sales.TestData;
+using Ambev.DeveloperEvaluation.Unit.TestInfrastructure;
 using FluentAssertions;
 using NSubstitute;
 using Xunit;
@@ -29,7 +30,8 @@ public sealed class CancelSaleItemHandlerTests
             requestSource.Token,
             transactionSource.Token);
         _saleRepository.GetByIdForUpdateAsync(sale.Id, transactionSource.Token).Returns(sale);
-        var handler = new CancelSaleItemHandler(_saleRepository, _unitOfWork);
+        var logger = new RecordingLogger<CancelSaleItemHandler>();
+        var handler = new CancelSaleItemHandler(_saleRepository, _unitOfWork, logger);
 
         var result = await handler.Handle(command, requestSource.Token);
 
@@ -42,6 +44,11 @@ public sealed class CancelSaleItemHandlerTests
             Arg.Any<Func<CancellationToken, Task<CancelSaleItemResult>>>(),
             requestSource.Token);
         await _unitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
+        var log = logger.Entries.Should().ContainSingle().Subject;
+        log.Properties.Keys.Should().BeEquivalentTo("Operation", "SaleId", "SaleItemId", "{OriginalFormat}");
+        log.Properties["Operation"].Should().Be("CancelSaleItem");
+        log.Properties["SaleId"].Should().Be(command.SaleId);
+        log.Properties["SaleItemId"].Should().Be(command.SaleItemId);
     }
 
     [Fact]
@@ -56,7 +63,8 @@ public sealed class CancelSaleItemHandlerTests
             CancellationToken.None,
             CancellationToken.None);
         _saleRepository.GetByIdForUpdateAsync(sale.Id, CancellationToken.None).Returns(sale);
-        var handler = new CancelSaleItemHandler(_saleRepository, _unitOfWork);
+        var logger = new RecordingLogger<CancelSaleItemHandler>();
+        var handler = new CancelSaleItemHandler(_saleRepository, _unitOfWork, logger);
 
         var result = await handler.Handle(
             new CancelSaleItemCommand(sale.Id, item.Id),
@@ -77,7 +85,8 @@ public sealed class CancelSaleItemHandlerTests
             CancellationToken.None,
             CancellationToken.None);
         _saleRepository.GetByIdForUpdateAsync(sale.Id, CancellationToken.None).Returns(sale);
-        var handler = new CancelSaleItemHandler(_saleRepository, _unitOfWork);
+        var logger = new RecordingLogger<CancelSaleItemHandler>();
+        var handler = new CancelSaleItemHandler(_saleRepository, _unitOfWork, logger);
 
         var action = () => handler.Handle(
             new CancelSaleItemCommand(sale.Id, item.Id),
@@ -86,6 +95,28 @@ public sealed class CancelSaleItemHandlerTests
         await action.Should().ThrowAsync<LastActiveSaleItemException>();
         item.IsActive.Should().BeTrue();
         await _unitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
+        logger.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Handle_TransactionCancellation_PropagatesWithoutLoggingSuccess()
+    {
+        var command = new CancelSaleItemCommand(
+            ApplicationSaleTestData.SaleId,
+            ApplicationSaleTestData.ProductOneId);
+        using var cancellationSource = new CancellationTokenSource();
+        cancellationSource.Cancel();
+        _unitOfWork.ExecuteInTransactionAsync(
+                Arg.Any<Func<CancellationToken, Task<CancelSaleItemResult>>>(),
+                cancellationSource.Token)
+            .Returns(Task.FromCanceled<CancelSaleItemResult>(cancellationSource.Token));
+        var logger = new RecordingLogger<CancelSaleItemHandler>();
+        var handler = new CancelSaleItemHandler(_saleRepository, _unitOfWork, logger);
+
+        var action = () => handler.Handle(command, cancellationSource.Token);
+
+        await action.Should().ThrowAsync<OperationCanceledException>();
+        logger.Entries.Should().BeEmpty();
     }
 
     [Fact]

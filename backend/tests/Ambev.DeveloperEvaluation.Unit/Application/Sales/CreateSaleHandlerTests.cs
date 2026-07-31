@@ -2,6 +2,7 @@ using Ambev.DeveloperEvaluation.Application.Sales.CreateSale;
 using Ambev.DeveloperEvaluation.Domain.Repositories;
 using Ambev.DeveloperEvaluation.Domain.Sales.Entities;
 using Ambev.DeveloperEvaluation.Unit.Application.Sales.TestData;
+using Ambev.DeveloperEvaluation.Unit.TestInfrastructure;
 using AutoMapper;
 using FluentAssertions;
 using NSubstitute;
@@ -30,7 +31,8 @@ public sealed class CreateSaleHandlerTests
         _saleRepository.AddAsync(Arg.Do<Sale>(sale => addedSale = sale), transactionSource.Token)
             .Returns(Task.CompletedTask);
         _mapper.Map<CreateSaleResult>(Arg.Any<Sale>()).Returns(expectedResult);
-        var handler = new CreateSaleHandler(_saleRepository, _unitOfWork, _mapper);
+        var logger = new RecordingLogger<CreateSaleHandler>();
+        var handler = new CreateSaleHandler(_saleRepository, _unitOfWork, _mapper, logger);
 
         var result = await handler.Handle(command, requestSource.Token);
 
@@ -46,6 +48,11 @@ public sealed class CreateSaleHandlerTests
             Arg.Any<Func<CancellationToken, Task<CreateSaleResult>>>(),
             requestSource.Token);
         await _unitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
+        var log = logger.Entries.Should().ContainSingle().Subject;
+        log.Level.Should().Be(Microsoft.Extensions.Logging.LogLevel.Information);
+        log.Properties.Keys.Should().BeEquivalentTo("Operation", "SaleId", "{OriginalFormat}");
+        log.Properties["Operation"].Should().Be("CreateSale");
+        log.Properties["SaleId"].Should().Be(expectedResult.Id);
     }
 
     [Fact]
@@ -59,7 +66,8 @@ public sealed class CreateSaleHandlerTests
             CancellationToken.None);
         _saleRepository.AddAsync(Arg.Any<Sale>(), CancellationToken.None)
             .Returns(Task.FromException(expectedException));
-        var handler = new CreateSaleHandler(_saleRepository, _unitOfWork, _mapper);
+        var logger = new RecordingLogger<CreateSaleHandler>();
+        var handler = new CreateSaleHandler(_saleRepository, _unitOfWork, _mapper, logger);
 
         var action = () => handler.Handle(command, CancellationToken.None);
 
@@ -67,5 +75,25 @@ public sealed class CreateSaleHandlerTests
         exception.Which.Should().BeSameAs(expectedException);
         _mapper.DidNotReceive().Map<CreateSaleResult>(Arg.Any<Sale>());
         await _unitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
+        logger.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Handle_TransactionCancellation_PropagatesWithoutLoggingSuccess()
+    {
+        var command = ApplicationSaleTestData.CreateCommand();
+        using var cancellationSource = new CancellationTokenSource();
+        cancellationSource.Cancel();
+        _unitOfWork.ExecuteInTransactionAsync(
+                Arg.Any<Func<CancellationToken, Task<CreateSaleResult>>>(),
+                cancellationSource.Token)
+            .Returns(Task.FromCanceled<CreateSaleResult>(cancellationSource.Token));
+        var logger = new RecordingLogger<CreateSaleHandler>();
+        var handler = new CreateSaleHandler(_saleRepository, _unitOfWork, _mapper, logger);
+
+        var action = () => handler.Handle(command, cancellationSource.Token);
+
+        await action.Should().ThrowAsync<OperationCanceledException>();
+        logger.Entries.Should().BeEmpty();
     }
 }

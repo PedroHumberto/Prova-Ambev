@@ -9,7 +9,6 @@ using FluentValidation.Results;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Ambev.DeveloperEvaluation.Unit.WebApi;
@@ -90,9 +89,7 @@ public class GlobalExceptionHandlerTests
     {
         await using var provider = CreateServices();
         var context = CreateHttpContext(provider);
-        var handler = new GlobalExceptionHandler(
-            provider.GetRequiredService<IProblemDetailsService>(),
-            NullLogger<GlobalExceptionHandler>.Instance);
+        var handler = new GlobalExceptionHandler(provider.GetRequiredService<IProblemDetailsService>());
 
         var handled = await handler.TryHandleAsync(context, exception, CancellationToken.None);
 
@@ -125,9 +122,7 @@ public class GlobalExceptionHandlerTests
         cancellationSource.Cancel();
         var context = CreateHttpContext(provider);
         context.RequestAborted = cancellationSource.Token;
-        var handler = new GlobalExceptionHandler(
-            provider.GetRequiredService<IProblemDetailsService>(),
-            NullLogger<GlobalExceptionHandler>.Instance);
+        var handler = new GlobalExceptionHandler(provider.GetRequiredService<IProblemDetailsService>());
 
         var handled = await handler.TryHandleAsync(
             context,
@@ -153,6 +148,7 @@ public class GlobalExceptionHandlerTests
             RequestServices = provider
         };
         context.Request.Path = "/users";
+        context.Request.Method = "GET";
         context.Response.Body = new MemoryStream();
         return context;
     }
