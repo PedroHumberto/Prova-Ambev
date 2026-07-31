@@ -1,5 +1,6 @@
 using Ambev.DeveloperEvaluation.Application;
 using Ambev.DeveloperEvaluation.Application.Auth.AuthenticateUser;
+using Ambev.DeveloperEvaluation.Application.Sales.Common;
 using Ambev.DeveloperEvaluation.Application.Sales.CreateSale;
 using Ambev.DeveloperEvaluation.Application.Sales.GetSaleById;
 using Ambev.DeveloperEvaluation.Application.Sales.ListSales;
@@ -127,7 +128,8 @@ public class AutoMapperConfigurationTests
 
         createResult.Should().BeEquivalentTo(getResult);
         updateResult.Should().BeEquivalentTo(getResult);
-        listResult.Should().BeEquivalentTo(getResult);
+        listResult.Should().BeEquivalentTo(getResult, options => options.ExcludingMissingMembers());
+        typeof(ListSalesItemResult).GetProperty(nameof(SaleResult.Items)).Should().BeNull();
         getResult.Id.Should().Be(sale.Id);
         getResult.SaleNumber.Should().Be(sale.SaleNumber);
         getResult.Subtotal.Should().Be(sale.Subtotal);

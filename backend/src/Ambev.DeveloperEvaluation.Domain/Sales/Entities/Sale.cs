@@ -255,7 +255,8 @@ public sealed class Sale
 
             if (!allItemsById.TryGetValue(itemId, out var existingItem))
             {
-                throw new SaleItemNotFoundException(itemId);
+                throw new InvalidSaleItemException(
+                    $"Sale item '{itemId}' does not belong to the sale.");
             }
 
             if (!activeItemsById.ContainsKey(itemId))
