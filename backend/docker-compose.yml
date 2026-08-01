@@ -1,3 +1,5 @@
+name: ambevsistem
+
 services:
   frontend:
     container_name: ambev_developer_evaluation_frontend
