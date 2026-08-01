@@ -82,6 +82,29 @@ The API waits for PostgreSQL before applying migrations. If the database is stil
 starting, migration attempts are retried after 10, 30, 50, 60, and 90 seconds;
 permanent database or schema errors still stop the API.
 
+The Compose configuration also enables local demonstration data through
+`DemoData__Enabled=true`. On startup, the API creates the following records when
+their markers are absent:
+
+- Active administrator: `demo.admin@ambev.local`
+- Password: `DemoPassword1!`
+- Active sale numbers: `DEMO-SALE-001` through `DEMO-SALE-006`
+
+These credentials are public development-only values and must not be used in a
+production environment. The operation is transactional and idempotent: restarts
+do not duplicate records, existing data is preserved, and an existing demo sale
+is not restored after being modified or cancelled. Missing demo markers are
+created again while the feature remains enabled. Set `DemoData__Enabled=false`
+on the Web API service to disable this behavior. Runs outside Compose do not
+enable demonstration data by default.
+
+If `demo.admin@ambev.local` already exists with a different password, a non-active
+status, or a role other than `Admin`, startup intentionally fails instead of
+overwriting that user. In a local demo database, either restore the documented
+credentials and state, remove only this demo user so it can be recreated, or
+disable `DemoData__Enabled`. These recovery actions are not intended for
+production data.
+
 The services are then available at:
 
 - Angular frontend: `http://localhost:4200`
