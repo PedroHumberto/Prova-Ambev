@@ -62,7 +62,7 @@ dotnet test Ambev.DeveloperEvaluation.sln --configuration Release --no-build --n
 ```
 
 Current verification on 2026-07-31: restore and the Release build succeeded, and
-all 335 Unit, Integration, and Functional tests passed. Functional tests run the
+all 460 Unit, Integration, and Functional tests passed. Functional tests run the
 real HTTP pipeline through `WebApplicationFactory`, JWT authentication, and a
 PostgreSQL Testcontainer. The command sequence above is the single supported way
 to validate the complete solution.
@@ -146,7 +146,7 @@ carry a stable `EventId`; consumers must deduplicate with that ID. Publication
 failures remain in the PostgreSQL outbox for unlimited durable retries with
 capped backoff. Only deterministically invalid internal outbox data is retained
 as dead-lettered. Rebus's one-way publisher does not use a RabbitMQ error queue.
-See `doc/architecture/0002-sales-integration-events.md` for details.
+See `doc/architecture/transactional-outbox.md` for details.
 
 ## Database Migrations
 
@@ -201,7 +201,7 @@ Use `!` and a `BREAKING CHANGE:` footer when a commit introduces an incompatible
 
 ## API Documentation
 
-Swagger is enabled in the Development environment. Additional endpoint references are available under `.doc/` in the repository when working with the complete project materials.
+Swagger is enabled in the Development environment. The canonical endpoint, architecture, operations, testing, and frontend documentation is indexed at `doc/README.md`.
 
 The Sales aggregate is implemented in
 `backend/src/Ambev.DeveloperEvaluation.Domain/Sales`. PostgreSQL persistence,
