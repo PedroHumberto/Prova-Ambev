@@ -2,6 +2,7 @@
 using Ambev.DeveloperEvaluation.IoC.Messaging;
 using Ambev.DeveloperEvaluation.IoC.HealthChecks;
 using Ambev.DeveloperEvaluation.ORM;
+using Ambev.DeveloperEvaluation.ORM.DataSeeding;
 using Ambev.DeveloperEvaluation.ORM.Outbox;
 using Ambev.DeveloperEvaluation.ORM.Repositories;
 using Microsoft.AspNetCore.Builder;
@@ -25,6 +26,7 @@ public class InfrastructureModuleInitializer : IModuleInitializer
         builder.Services.AddScoped<ICatalogRepository, CatalogRepository>();
         builder.Services.AddScoped<IOutboxStore, OutboxStore>();
         builder.Services.AddScoped<OutboxDispatcher>();
+        builder.Services.AddScoped<DemoDataSeeder>();
         builder.Services.AddSingleton(TimeProvider.System);
 
         builder.Services.AddHealthChecks()
