@@ -27,9 +27,7 @@
 |   |   |-- Ambev.DeveloperEvaluation.Integration/
 |   |   `-- Ambev.DeveloperEvaluation.Functional/
 |   |-- Ambev.DeveloperEvaluation.sln
-|   |-- Dockerfile                              # Additional solution-level Dockerfile
 |   |-- docker-compose.yml
-|   |-- docker-compose.override.yml
 |   |-- coverage-report.bat
 |   `-- coverage-report.sh
 |-- AGENTS.md
