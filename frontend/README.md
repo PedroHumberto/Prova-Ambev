@@ -1,6 +1,6 @@
 # Ambev Sales Frontend
 
-Frontend Angular standalone, strict e modular para a API de avaliação Ambev.
+Standalone, strict, and modular Angular frontend for the Ambev evaluation API.
 
 ## Executar
 
@@ -9,7 +9,7 @@ npm.cmd install
 npm.cmd start
 ```
 
-O proxy aponta `/api` para `http://localhost:5119`. Inicie o backend antes de acessar `http://localhost:4200`.
+The proxy points `/api` to `http://localhost:5119`. Start the backend before accessing `http://localhost:4200`.
 
 ## Verificar
 
