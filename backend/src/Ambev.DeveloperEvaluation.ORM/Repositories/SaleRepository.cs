@@ -68,7 +68,7 @@ public sealed class SaleRepository(DefaultContext context) : ISaleRepository
     private static IQueryable<Sale> ApplyFilters(IQueryable<Sale> query, SaleQueryCriteria criteria)
     {
         if (criteria.SaleNumber is not null)
-            query = query.Where(sale => sale.SaleNumber == criteria.SaleNumber);
+            query = query.Where(sale => EF.Functions.ILike(sale.SaleNumber, ContainsPattern(criteria.SaleNumber), "\\"));
         if (criteria.SaleDateFrom is not null)
             query = query.Where(sale => sale.SaleDate >= criteria.SaleDateFrom);
         if (criteria.SaleDateTo is not null)
@@ -76,16 +76,21 @@ public sealed class SaleRepository(DefaultContext context) : ISaleRepository
         if (criteria.CustomerId is not null)
             query = query.Where(sale => sale.CustomerId == criteria.CustomerId);
         if (criteria.CustomerName is not null)
-            query = query.Where(sale => sale.CustomerName == criteria.CustomerName);
+            query = query.Where(sale => EF.Functions.ILike(sale.CustomerName, ContainsPattern(criteria.CustomerName), "\\"));
         if (criteria.BranchId is not null)
             query = query.Where(sale => sale.BranchId == criteria.BranchId);
         if (criteria.BranchName is not null)
-            query = query.Where(sale => sale.BranchName == criteria.BranchName);
+            query = query.Where(sale => EF.Functions.ILike(sale.BranchName, ContainsPattern(criteria.BranchName), "\\"));
         if (criteria.Status is not null)
             query = query.Where(sale => sale.Status == criteria.Status);
 
         return query;
     }
+
+    private static string ContainsPattern(string search) =>
+        $"%{search.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("%", "\\%", StringComparison.Ordinal)
+            .Replace("_", "\\_", StringComparison.Ordinal)}%";
 
     private static IOrderedQueryable<Sale> ApplyOrdering(
         IQueryable<Sale> query,

@@ -1,0 +1,64 @@
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">PAINEL OPERACIONAL</p>
+        <h1>Vendas <span class="heading-count">{{ page()?.totalCount ?? 0 }}</span></h1>
+        <p class="page-subtitle">Acompanhe e gerencie todas as vendas da operação.</p>
+    </div><a class="button button-primary" routerLink="/sales/new">＋ Nova venda</a>
+</section>
+@if (message()) { <app-toast [message]="message()" [error]="true" /> }
+<section class="panel filters-panel">
+    <form [formGroup]="filtersForm" (ngSubmit)="search()">
+        <div class="filter-main">
+            <div class="search-field"><span>⌕</span><input formControlName="saleNumber"
+                    placeholder="Buscar por número da venda"></div><select formControlName="status">
+                <option value="">Todos os status</option>
+                <option value="Active">Ativas</option>
+                <option value="Cancelled">Canceladas</option>
+            </select><button class="button button-ghost" type="submit">Filtrar</button>
+        </div>
+        <div class="filter-more"><input formControlName="customerName" placeholder="Cliente"><input
+                formControlName="branchName" placeholder="Filial"><input formControlName="saleDateFrom" type="date"
+                aria-label="Data inicial"><span class="date-separator">até</span><input formControlName="saleDateTo"
+                type="date" aria-label="Data final"><button type="button" class="link-button"
+                (click)="clearFilters()">Limpar filtros</button></div>
+    </form>
+</section>
+<section class="panel table-panel">
+    <div class="table-head">
+        <div>
+            <h2>Histórico de vendas</h2>
+            <p>{{ page()?.totalCount ?? 0 }} registros encontrados</p>
+        </div><button type="button" class="icon-button" (click)="load()" aria-label="Atualizar">⟳</button>
+    </div>@if (loading()) { <div class="loading-state"><span class="spinner"></span>Carregando vendas...</div> } @else if
+    (page()?.items?.length) { <div class="table-scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th>Venda</th>
+                    <th>Data</th>
+                    <th>Cliente / Filial</th>
+                    <th>Status</th>
+                    <th class="align-right">Total</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>@for (sale of page()?.items ?? []; track sale.id) { <tr>
+                    <td><a class="table-link mono" [routerLink]="['/sales', sale.id]">{{ sale.saleNumber }}</a></td>
+                    <td class="muted">{{ sale.saleDate | date:'dd MMM yyyy' }}</td>
+                    <td><strong>{{ sale.customerName }}</strong><small class="cell-sub">{{ sale.branchName }}</small>
+                    </td>
+                    <td><span class="status-pill" [class.status-cancelled]="sale.status === 'Cancelled'">{{ sale.status
+                            === 'Cancelled' ? 'Cancelada' : 'Ativa' }}</span></td>
+                    <td class="align-right money">{{ sale.totalAmount | currency:'BRL':'symbol':'1.2-2' }}</td>
+                    <td class="align-right"><a class="row-action" [routerLink]="['/sales', sale.id]">Ver →</a></td>
+                </tr> }</tbody>
+        </table>
+    </div>
+    <div class="pagination"><span>Mostrando {{ rangeStart() }}–{{ rangeEnd() }} de {{ page()?.totalCount ?? 0 }}</span>
+        <div><button type="button" class="page-button" [disabled]="currentPage() <= 1"
+                (click)="goTo(currentPage() - 1)">‹</button><span class="page-number">{{ currentPage() }}</span><button
+                type="button" class="page-button" [disabled]="currentPage() >= (page()?.totalPages ?? 0)"
+                (click)="goTo(currentPage() + 1)">›</button></div>
+    </div> } @else { <app-empty-state icon="◌" title="Nenhuma venda encontrada"
+        text="Ajuste os filtros ou crie uma nova venda para começar." /> }
+</section>

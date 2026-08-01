@@ -144,7 +144,8 @@ dotnet ef database update --project src/Ambev.DeveloperEvaluation.ORM --startup-
 - Override configuration with environment variables such as `ConnectionStrings__DefaultConnection` and `Jwt__SecretKey`.
 - `docker compose up --build` starts API, PostgreSQL 13, RabbitMQ 4.1, MongoDB 8, and Redis 7.4.1. PostgreSQL and RabbitMQ are integrated into application code; MongoDB and Redis remain provisioned but unused.
 - Compose exposes API ports `8080` and `8081`. PostgreSQL, RabbitMQ, MongoDB, and Redis request dynamically assigned host ports rather than pinning their standard ports.
-- HTTPS Compose startup requires `HTTPS_CERT_PASSWORD` and `%APPDATA%/ASP.NET/Https/Ambev.DeveloperEvaluation.WebApi.pfx` on Windows.
+- Compose starts the API over HTTP by default and does not require a host-specific certificate; HTTPS remains available for local profiles when configured explicitly.
+- API startup retries transient PostgreSQL migration connection failures with progressive delays before failing permanently.
 - Health endpoints are `/health`, `/health/live`, and `/health/ready`. Liveness/readiness checks are currently synthetic and do not prove PostgreSQL, RabbitMQ, Redis, MongoDB, or migration health.
 - Serilog writes structured logs to console and, when no debugger is attached, rolling files under `logs/`. There is no configured OpenTelemetry pipeline or DataDog exporter.
 

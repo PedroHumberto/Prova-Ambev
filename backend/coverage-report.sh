@@ -1,19 +1,35 @@
 #!/bin/bash
 
+set -euo pipefail
+
 echo "Install tools if not present"
-dotnet tool install --global coverlet.console
+dotnet tool install --global dotnet-coverage
 dotnet tool install --global dotnet-reportgenerator-globaltool
 
 echo "Clean and build solution"
-dotnet restore
+dotnet restore Ambev.DeveloperEvaluation.sln
 dotnet build  Ambev.DeveloperEvaluation.sln --configuration Release --no-restore
 
 echo "Run tests with coverage"
-dotnet test  Ambev.DeveloperEvaluation.sln --no-restore --verbosity normal \
-/p:CollectCoverage=true \
-/p:CoverletOutputFormat=cobertura \
-/p:CoverletOutput=./TestResults/coverage.cobertura.xml \
-/p:Exclude="[*]*.Program,[*]*.Startup,[*]*.Migrations.*"
+rm -rf ./TestResults ./tests/*/TestResults
+
+dotnet-coverage collect \
+"dotnet test tests/Ambev.DeveloperEvaluation.Unit/Ambev.DeveloperEvaluation.Unit.csproj --configuration Release --no-build --no-restore --verbosity normal" \
+--settings coverage.runsettings \
+--output tests/Ambev.DeveloperEvaluation.Unit/TestResults/coverage.cobertura.xml \
+--output-format cobertura
+
+dotnet-coverage collect \
+"dotnet test tests/Ambev.DeveloperEvaluation.Integration/Ambev.DeveloperEvaluation.Integration.csproj --configuration Release --no-build --no-restore --verbosity normal" \
+--settings coverage.runsettings \
+--output tests/Ambev.DeveloperEvaluation.Integration/TestResults/coverage.cobertura.xml \
+--output-format cobertura
+
+dotnet-coverage collect \
+"dotnet test tests/Ambev.DeveloperEvaluation.Functional/Ambev.DeveloperEvaluation.Functional.csproj --configuration Release --no-build --no-restore --verbosity normal" \
+--settings coverage.runsettings \
+--output tests/Ambev.DeveloperEvaluation.Functional/TestResults/coverage.cobertura.xml \
+--output-format cobertura
 
 echo "Generate coverage report"
 reportgenerator \
@@ -26,4 +42,3 @@ rm -rf bin obj
 
 echo ""
 echo "Coverage report generated at TestResults/CoverageReport/index.html"
-pause

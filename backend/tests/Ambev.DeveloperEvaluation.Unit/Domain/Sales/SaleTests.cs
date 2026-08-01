@@ -263,6 +263,57 @@ public sealed class SaleTests
     }
 
     [Fact]
+    public void UpdateHeader_ChangedSnapshots_NormalizesValuesAndRaisesSaleUpdated()
+    {
+        // Arrange
+        var clock = new TestTimeProvider(SaleTestData.CreatedAt);
+        var sale = SaleTestData.CreateSale(clock);
+        sale.ClearDomainEvents();
+        var updatedAt = SaleTestData.CreatedAt.AddMinutes(1);
+        clock.SetUtcNow(updatedAt);
+
+        // Act
+        sale.UpdateHeader(
+            "  SALE-UPDATED  ",
+            SaleTestData.SaleDate.AddDays(1),
+            Guid.Parse("66666666-6666-6666-6666-666666666666"),
+            "  Updated Customer  ",
+            Guid.Parse("77777777-7777-7777-7777-777777777777"),
+            "  Updated Branch  ");
+
+        // Assert
+        sale.SaleNumber.Should().Be("SALE-UPDATED");
+        sale.CustomerName.Should().Be("Updated Customer");
+        sale.BranchName.Should().Be("Updated Branch");
+        sale.UpdatedAt.Should().Be(updatedAt);
+        sale.DomainEvents.Should().ContainSingle().Which.Should().Be(new SaleUpdated(sale.Id, updatedAt));
+    }
+
+    [Fact]
+    public void UpdateHeader_EquivalentNormalizedSnapshots_IsNoOp()
+    {
+        // Arrange
+        var clock = new TestTimeProvider(SaleTestData.CreatedAt);
+        var sale = SaleTestData.CreateSale(clock);
+        var originalUpdatedAt = sale.UpdatedAt;
+        sale.ClearDomainEvents();
+        clock.SetUtcNow(SaleTestData.CreatedAt.AddMinutes(1));
+
+        // Act
+        sale.UpdateHeader(
+            $"  {sale.SaleNumber}  ",
+            sale.SaleDate,
+            sale.CustomerId,
+            $"  {sale.CustomerName}  ",
+            sale.BranchId,
+            $"  {sale.BranchName}  ");
+
+        // Assert
+        sale.UpdatedAt.Should().Be(originalUpdatedAt);
+        sale.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
     public void UpdateItem_QuantityChangesDiscountBand_RecalculatesValuesAndRaisesSaleUpdated()
     {
         // Arrange
@@ -283,6 +334,26 @@ public sealed class SaleTests
         sale.TotalAmount.Should().Be(80m);
         item.UpdatedAt.Should().Be(updatedAt);
         sale.DomainEvents.Should().ContainSingle().Which.Should().Be(new SaleUpdated(sale.Id, updatedAt));
+    }
+
+    [Fact]
+    public void UpdateItem_EquivalentNormalizedValues_IsNoOp()
+    {
+        // Arrange
+        var clock = new TestTimeProvider(SaleTestData.CreatedAt);
+        var sale = SaleTestData.CreateSale(clock);
+        var item = sale.Items.Single();
+        var originalUpdatedAt = sale.UpdatedAt;
+        sale.ClearDomainEvents();
+        clock.SetUtcNow(SaleTestData.CreatedAt.AddMinutes(1));
+
+        // Act
+        sale.UpdateItem(item.Id, $"  {item.ProductName}  ", item.Quantity, item.UnitPrice);
+
+        // Assert
+        item.UpdatedAt.Should().Be(originalUpdatedAt);
+        sale.UpdatedAt.Should().Be(originalUpdatedAt);
+        sale.DomainEvents.Should().BeEmpty();
     }
 
     [Theory]
@@ -491,6 +562,58 @@ public sealed class SaleTests
         sale.Items.Should().OnlyContain(item => item.IsActive);
         sale.UpdatedAt.Should().Be(originalUpdatedAt);
         sale.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ReplaceEditableData_ActiveProductWithoutItsItemId_RejectsAmbiguousReplacementWithoutChanges()
+    {
+        // Arrange
+        var sale = SaleTestData.CreateSale();
+        var item = sale.Items.Single();
+        var originalUpdatedAt = sale.UpdatedAt;
+        sale.ClearDomainEvents();
+
+        // Act
+        var act = () => sale.ReplaceEditableData(
+            sale.SaleNumber,
+            sale.SaleDate,
+            sale.CustomerId,
+            sale.CustomerName,
+            sale.BranchId,
+            sale.BranchName,
+            [new SaleItemReplacement(null, item.ProductId, item.ProductName, item.Quantity, item.UnitPrice)]);
+
+        // Assert
+        act.Should().Throw<InvalidSaleItemException>()
+            .WithMessage($"The active item for product '{item.ProductId}' must retain its item ID.");
+        sale.Items.Should().ContainSingle().Which.Should().BeSameAs(item);
+        sale.UpdatedAt.Should().Be(originalUpdatedAt);
+        sale.DomainEvents.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CancelItem_InvalidItemId_ThrowsSpecificValidationException(bool emptyId)
+    {
+        // Arrange
+        var sale = SaleTestData.CreateSale();
+        var itemId = emptyId ? Guid.Empty : Guid.Parse("99999999-9999-9999-9999-999999999999");
+
+        // Act
+        var act = () => sale.CancelItem(itemId);
+
+        // Assert
+        if (emptyId)
+        {
+            act.Should().Throw<InvalidSaleItemException>()
+                .WithMessage("Sale item ID cannot be empty.");
+        }
+        else
+        {
+            act.Should().Throw<SaleItemNotFoundException>()
+                .WithMessage($"Sale item '{itemId}' does not belong to the sale.");
+        }
     }
 
     [Fact]

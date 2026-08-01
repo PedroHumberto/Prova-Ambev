@@ -1,3 +1,4 @@
+using Ambev.DeveloperEvaluation.Common.Security;
 using Ambev.DeveloperEvaluation.Domain.Entities;
 using Ambev.DeveloperEvaluation.Domain.Enums;
 using Ambev.DeveloperEvaluation.Unit.Domain.Entities.TestData;
@@ -43,6 +44,48 @@ public class UserTests
 
         // Assert
         Assert.Equal(UserStatus.Suspended, user.Status);
+        Assert.NotNull(user.UpdatedAt);
+    }
+
+    [Fact]
+    public void Deactivate_ActiveUser_ChangesStatusAndRecordsUpdateTime()
+    {
+        // Arrange
+        var previousUpdate = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var user = new User
+        {
+            Status = UserStatus.Active,
+            UpdatedAt = previousUpdate
+        };
+
+        // Act
+        user.Deactivate();
+
+        // Assert
+        Assert.Equal(UserStatus.Inactive, user.Status);
+        Assert.NotNull(user.UpdatedAt);
+        Assert.NotEqual(previousUpdate, user.UpdatedAt.Value);
+        Assert.Equal(DateTimeKind.Utc, user.UpdatedAt.Value.Kind);
+    }
+
+    [Fact]
+    public void IUserProjection_PopulatedUser_ExposesIdentityNameAndRoleAsSecurityStrings()
+    {
+        // Arrange
+        var user = new User
+        {
+            Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            Username = "domain.user",
+            Role = UserRole.Admin
+        };
+
+        // Act
+        var securityUser = (IUser)user;
+
+        // Assert
+        Assert.Equal(user.Id.ToString(), securityUser.Id);
+        Assert.Equal("domain.user", securityUser.Username);
+        Assert.Equal("Admin", securityUser.Role);
     }
 
     /// <summary>

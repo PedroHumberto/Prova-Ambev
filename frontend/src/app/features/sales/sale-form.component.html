@@ -1,0 +1,69 @@
+<section class="page-heading">
+    <div><a class="back-link" routerLink="/sales">← Voltar para vendas</a>
+        <p class="eyebrow">{{ editMode ? 'EDIÇÃO' : 'NOVA OPERAÇÃO' }}</p>
+        <h1>{{ editMode ? 'Editar venda' : 'Registrar venda' }}</h1>
+        <p class="page-subtitle">{{ editMode ? 'Atualize os dados editáveis da venda.' : 'Registre uma nova venda na
+            operação.' }}</p>
+    </div>
+</section>@if (message()) { <app-toast [message]="message()" [error]="true" /> }<form class="sale-form"
+    [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <section class="panel form-panel">
+        <div class="panel-title">
+            <div>
+                <h2>Dados da venda</h2>
+                <p>Identificação e contexto da operação.</p>
+            </div>
+        </div>
+        <div class="form-grid">
+            <div><label for="saleNumber">Número da venda</label><input id="saleNumber" formControlName="saleNumber"
+                    placeholder="Ex.: VEN-2026-001"><small class="field-error">{{ errorFor('saleNumber') }}</small>
+            </div>
+            <div><label for="saleDate">Data da venda</label><input id="saleDate" type="datetime-local"
+                    formControlName="saleDate"><small class="field-error">{{ errorFor('saleDate') }}</small></div>
+            <div class="autocomplete-field"><label for="customerName">Cliente</label><input id="customerName"
+                    formControlName="customerName" placeholder="Buscar cliente" autocomplete="off"
+                    (focus)="searchCatalog('customers', form.controls.customerName.value ?? '')"
+                    (input)="customerInput($any($event.target).value)"><small class="field-error">{{
+                    errorFor('customerId') || errorFor('customerName') }}</small>@if (customers().length) {<div
+                    class="autocomplete-options">@for (item of customers(); track item.id) {<button type="button"
+                        class="autocomplete-option" (click)="selectCustomer(item)"><strong>{{ item.name }}</strong><small
+                            class="mono">{{ item.id }}</small></button>}</div>}</div>
+            <div class="autocomplete-field"><label for="branchName">Filial</label><input id="branchName"
+                    formControlName="branchName" placeholder="Buscar filial" autocomplete="off"
+                    (focus)="searchCatalog('branches', form.controls.branchName.value ?? '')"
+                    (input)="branchInput($any($event.target).value)"><small class="field-error">{{
+                    errorFor('branchId') || errorFor('branchName') }}</small>@if (branches().length) {<div
+                    class="autocomplete-options">@for (item of branches(); track item.id) {<button type="button"
+                        class="autocomplete-option" (click)="selectBranch(item)"><strong>{{ item.name }}</strong><small
+                            class="mono">{{ item.id }}</small></button>}</div>}</div>
+        </div>
+    </section>
+    <section class="panel form-panel">
+        <div class="panel-title">
+            <div>
+                <h2>Itens</h2>
+                <p>Quantidade entre 1 e 20. O desconto é calculado pelo servidor.</p>
+            </div><button type="button" class="button button-ghost" (click)="addItem()">＋ Adicionar item</button>
+        </div>
+        <div class="items-editor" formArrayName="items">@for (item of items.controls; track item; let index = $index) {
+            <div class="item-editor" [formGroupName]="index">
+                <div class="item-index">{{ (index + 1).toString().padStart(2, '0') }}</div>
+                <div class="autocomplete-field"><label [for]="'productName' + index">Produto</label><input
+                        [id]="'productName' + index" formControlName="productName" placeholder="Buscar produto"
+                        autocomplete="off" (focus)="searchCatalog('products', item.get('productName')?.value ?? '', index)"
+                        (input)="productInput(index, $any($event.target).value)">@if (products()[index]?.length) {<div
+                        class="autocomplete-options">@for (product of products()[index]; track product.id) {<button
+                            type="button" class="autocomplete-option" (click)="selectProduct(index, product)"><strong>{{
+                                product.name }}</strong><small class="mono">{{ product.id }}</small></button>}</div>}</div>
+                <div><label [for]="'quantity' + index">Qtd.</label><input [id]="'quantity' + index" type="number"
+                        min="1" max="20" formControlName="quantity"></div>
+                <div><label [for]="'unitPrice' + index">Preço unit.</label><input [id]="'unitPrice' + index"
+                        type="number" min="0.01" step="0.01" formControlName="unitPrice"></div><button type="button"
+                    class="icon-button remove-item" [disabled]="items.length === 1" (click)="removeItem(index)"
+                    [attr.aria-label]="'Remover item ' + (index + 1)">×</button>
+            </div>}</div>
+    </section>
+    <div class="form-actions"><a class="button button-ghost" routerLink="/sales">Descartar</a><button
+            class="button button-primary" type="submit" [disabled]="loading()">{{ loading() ? 'Salvando...' : (editMode
+            ? 'Salvar alterações' : 'Registrar venda') }} <span>→</span></button></div>
+</form>

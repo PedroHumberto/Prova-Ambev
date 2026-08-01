@@ -22,6 +22,7 @@ public class InfrastructureModuleInitializer : IModuleInitializer
         builder.Services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<DefaultContext>());
         builder.Services.AddScoped<IUserRepository, UserRepository>();
         builder.Services.AddScoped<ISaleRepository, SaleRepository>();
+        builder.Services.AddScoped<ICatalogRepository, CatalogRepository>();
         builder.Services.AddScoped<IOutboxStore, OutboxStore>();
         builder.Services.AddScoped<OutboxDispatcher>();
         builder.Services.AddSingleton(TimeProvider.System);

@@ -7,6 +7,7 @@ using Ambev.DeveloperEvaluation.Domain.Sales.Exceptions;
 using Ambev.DeveloperEvaluation.Unit.Application.Sales.TestData;
 using Ambev.DeveloperEvaluation.Unit.TestInfrastructure;
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
 
@@ -16,6 +17,24 @@ public sealed class CancelSaleItemHandlerTests
 {
     private readonly ISaleRepository _saleRepository = Substitute.For<ISaleRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
+
+    [Theory]
+    [InlineData("saleRepository")]
+    [InlineData("unitOfWork")]
+    [InlineData("logger")]
+    public void Constructor_MissingRequiredDependency_ThrowsArgumentNullException(string dependencyName)
+    {
+        var logger = Substitute.For<ILogger<CancelSaleItemHandler>>();
+        Action action = dependencyName switch
+        {
+            "saleRepository" => () => new CancelSaleItemHandler(null!, _unitOfWork),
+            "unitOfWork" => () => new CancelSaleItemHandler(_saleRepository, null!),
+            _ => () => new CancelSaleItemHandler(_saleRepository, _unitOfWork, null!)
+        };
+
+        action.Should().Throw<ArgumentNullException>()
+            .Which.ParamName.Should().Be(dependencyName);
+    }
 
     [Fact]
     public async Task Handle_ActiveItem_CancelsItemUnderLockAndRecalculatesTotals()
