@@ -1,10 +1,10 @@
 # Ambev Developer Evaluation
 
-Backend API for the Ambev Developer Evaluation, built with .NET 8, PostgreSQL, Rebus, and RabbitMQ. The solution follows a layered architecture and provides user management, authentication, and sales.
+Backend API for the Ambev Developer Evaluation, built with .NET 10, PostgreSQL, Rebus, and RabbitMQ. The solution follows a layered architecture and provides user management, authentication, and sales.
 
 ## Technology Stack
 
-- .NET 8 and ASP.NET Core Web API
+- .NET 10 and ASP.NET Core Web API
 - PostgreSQL and Entity Framework Core
 - Rebus and RabbitMQ with a transactional PostgreSQL outbox
 - MediatR and AutoMapper
@@ -39,12 +39,12 @@ All .NET and Docker commands in this document must be run from `backend/`.
 
 ## Prerequisites
 
-Install [.NET SDK 8.0.423](https://dotnet.microsoft.com/download/dotnet/8.0).
+Install [.NET SDK 10.0.302](https://dotnet.microsoft.com/download/dotnet/10.0).
 [Docker Desktop](https://www.docker.com/products/docker-desktop/) must also be
 running for the Integration and Functional test projects, which provision real
 PostgreSQL and RabbitMQ dependencies with Testcontainers.
 
-The repository-level `global.json` pins the SDK to the installed .NET 8 feature band and permits newer patches in that band. Confirm the selected SDK with:
+The repository-level `global.json` pins the SDK to the installed .NET 10 feature band and permits newer patches in that band. Confirm the selected SDK with:
 
 ```powershell
 dotnet --version
@@ -61,11 +61,11 @@ dotnet build Ambev.DeveloperEvaluation.sln --configuration Release --no-restore
 dotnet test Ambev.DeveloperEvaluation.sln --configuration Release --no-build --no-restore
 ```
 
-Current verification on 2026-07-31: restore and the Release build succeeded, and
-all 460 Unit, Integration, and Functional tests passed. Functional tests run the
-real HTTP pipeline through `WebApplicationFactory`, JWT authentication, and a
-PostgreSQL Testcontainer. The command sequence above is the single supported way
-to validate the complete solution.
+Current verification on 2026-08-01 UTC: restore succeeded, the Release build
+completed with 0 warnings and 0 errors, and all 460 tests passed (400 Unit, 50
+Integration, and 10 Functional), all locally in Release. Functional tests run
+the real HTTP pipeline through `WebApplicationFactory`, JWT authentication, and
+a PostgreSQL Testcontainer.
 
 To generate a coverage report, use `coverage-report.bat` on Windows or `coverage-report.sh` on Linux and macOS.
 
@@ -113,6 +113,12 @@ The services are then available at:
 - API through the frontend proxy: `http://localhost:4200/api`
 - Health checks: `http://localhost:8080/health`, `/health/live`, and `/health/ready`
 - RabbitMQ management UI: use the dynamically assigned host port shown by `docker compose ps`
+
+The 2026-08-01 UTC Compose verification rebuilt and started the stack with
+`mcr.microsoft.com/dotnet/sdk:10.0.302` and
+`mcr.microsoft.com/dotnet/aspnet:10.0.10`. The API reported runtime `10.0.10`;
+live, ready, and frontend endpoints returned HTTP 200, and PostgreSQL and
+RabbitMQ were healthy.
 
 Stop the stack with:
 

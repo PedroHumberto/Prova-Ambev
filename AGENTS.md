@@ -2,10 +2,10 @@
 
 ## Scope And Sources Of Truth
 
-- This repository contains a .NET 8 backend evaluation API. Run all .NET, EF Core, coverage, and Docker commands from `backend/` unless a command explicitly targets a root-level file.
-- The repository-level `global.json` pins SDK `8.0.423` with `rollForward: latestPatch`. Confirm the active SDK with `dotnet --version` when build behavior differs between environments.
+- This repository contains a .NET 10 backend evaluation API. Run all .NET, EF Core, coverage, and Docker commands from `backend/` unless a command explicitly targets a root-level file.
+- The repository-level `global.json` pins SDK `10.0.302` with `rollForward: latestPatch`. All 10 projects target `net10.0`. Confirm the active SDK with `dotnet --version` when build behavior differs between environments.
 - Treat executable code and automated tests as the source of truth for current behavior. Treat `doc/architecture/0001-sales-functional-contract.md` as the accepted target contract for Sales. Known differences between that ADR and the current HTTP implementation are listed below.
-- `README.md` describes setup and project status. `.doc/` contains the original evaluation API references. `doc/`, `TASKS.md`, `ANALISE.md`, and the template files may be workspace-local because they are ignored by Git; do not assume they exist in every clone.
+- `README.md` describes setup and project status. `doc/` is tracked and contains the current system documentation. `.doc/` contains the original evaluation API references; `TASKS.md`, `ANALISE.md`, and template files may be workspace-local because they are ignored by Git, so do not assume those files exist in every clone.
 - Never commit production credentials. Values in `appsettings.json` and Compose are development defaults only; use environment variables, User Secrets, or a secret manager outside local development.
 
 ## Repository Structure
@@ -141,6 +141,7 @@ dotnet ef database update --project src/Ambev.DeveloperEvaluation.ORM --startup-
 - Default launch URLs are `http://localhost:5119` and `https://localhost:7181`; Swagger is available only in Development.
 - Override configuration with environment variables such as `ConnectionStrings__DefaultConnection` and `Jwt__SecretKey`.
 - `docker compose up --build` starts API, PostgreSQL 13, RabbitMQ 4.1, MongoDB 8, and Redis 7.4.1. PostgreSQL and RabbitMQ are integrated into application code; MongoDB and Redis remain provisioned but unused.
+- The API Dockerfile builds with `mcr.microsoft.com/dotnet/sdk:10.0.302` and runs on `mcr.microsoft.com/dotnet/aspnet:10.0.10`.
 - Compose exposes API ports `8080` and `8081`. PostgreSQL, RabbitMQ, MongoDB, and Redis request dynamically assigned host ports rather than pinning their standard ports.
 - Compose starts the API over HTTP by default and does not require a host-specific certificate; HTTPS remains available for local profiles when configured explicitly.
 - API startup retries transient PostgreSQL migration connection failures with progressive delays before failing permanently.
@@ -159,7 +160,8 @@ dotnet test Ambev.DeveloperEvaluation.sln --configuration Release --no-build --n
 
 - Unit tests cover Application, Domain, ORM basics, and WebApi contracts/behavior.
 - Integration tests are not placeholders. `tests/Ambev.DeveloperEvaluation.Integration/Sales/SalePersistenceTests.cs` uses PostgreSQL Testcontainers and covers migrations, constraints, repository round trips, transactions, row locks, concurrency, and DI. Docker must be available to run them.
-- The Functional project is currently an empty placeholder; end-to-end HTTP coverage remains pending.
+- Functional tests exercise the real HTTP pipeline through `WebApplicationFactory`, JWT authentication, and a PostgreSQL Testcontainer.
+- Verification on 2026-08-01 UTC passed restore, a Release build with 0 warnings and 0 errors, 400 Unit tests, 50 Integration tests, and 10 Functional tests, all locally in Release.
 - Focus a unit test class with:
 
 ```powershell
