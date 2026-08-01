@@ -1,0 +1,23 @@
+<div class="app-frame">
+  <aside class="sidebar" [class.sidebar-open]="menuOpen()">
+    <a class="brand" routerLink="/sales" (click)="menuOpen.set(false)">
+      <span class="brand-mark">A</span><span><strong>ambev</strong><small>sales control</small></span>
+    </a>
+    <nav class="nav-list" aria-label="Principal">
+      <a routerLink="/sales" routerLinkActive="nav-active" [routerLinkActiveOptions]="{ exact: true }"
+        (click)="menuOpen.set(false)"><span>◈</span> Vendas</a>
+      <a routerLink="/users" routerLinkActive="nav-active" (click)="menuOpen.set(false)"><span>◎</span> Usuários</a>
+    </nav>
+    <div class="sidebar-foot"><span class="status-dot"></span> API conectada</div>
+  </aside>
+  <div class="main-area">
+    <header class="topbar">
+      <button class="menu-button" type="button" aria-label="Abrir menu" (click)="toggleMenu()">☰</button>
+      <div class="breadcrumb"><span>Workspace</span><b>/</b><strong>Operações</strong></div>
+      <div class="profile" [title]="auth.session()?.email ?? ''"><span class="avatar">{{ initials() }}</span><span
+          class="profile-name">{{ auth.session()?.name || 'Operador' }}</span><button type="button"
+          class="logout-button" (click)="logout()" aria-label="Sair">↗</button></div>
+    </header>
+    <main class="content"><router-outlet /></main>
+  </div>
+</div>

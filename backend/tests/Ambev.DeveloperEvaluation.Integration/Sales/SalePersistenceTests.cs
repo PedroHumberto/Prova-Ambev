@@ -299,7 +299,7 @@ public sealed class SalePersistenceTests(PostgreSqlFixture fixture, ITestOutputH
     }
 
     [Fact]
-    public async Task GetPageAsync_EachFilterAndCombinedCriteria_UsesInclusiveExactPostgreSqlFiltering()
+    public async Task GetPageAsync_EachFilterAndCombinedCriteria_UsesInclusiveContainsPostgreSqlFiltering()
     {
         await using var database = await fixture.CreateDatabaseAsync();
         var customerId = Guid.Parse("11111111-1111-1111-1111-111111111101");
@@ -352,12 +352,15 @@ public sealed class SalePersistenceTests(PostgreSqlFixture fixture, ITestOutputH
         var isolatedFilters = new (SaleQueryCriteria Criteria, Guid[] ExpectedIds)[]
         {
             (Criteria(saleNumber: "literal%_sale"), [exact.Id]),
+            (Criteria(saleNumber: "TERAL%_S"), [exact.Id]),
             (Criteria(saleDateFrom: BaseDate), [exact.Id, cancelled.Id, wildcardLookalike.Id, unicode.Id]),
             (Criteria(saleDateTo: BaseDate), [exact.Id, before.Id]),
             (Criteria(customerId: customerId), [exact.Id]),
             (Criteria(customerName: "customer%_snapshot"), [exact.Id]),
+            (Criteria(customerName: "MER%_SNA"), [exact.Id]),
             (Criteria(branchId: branchId), [exact.Id]),
             (Criteria(branchName: "branch%_snapshot"), [exact.Id]),
+            (Criteria(branchName: "NCH%_SNA"), [exact.Id]),
             (Criteria(customerName: "CAFÉ CUSTOMER"), [unicode.Id]),
             (Criteria(branchName: "AGÊNCIA BRANCH"), [unicode.Id]),
             (Criteria(status: SaleStatus.Cancelled), [cancelled.Id])
@@ -395,11 +398,11 @@ public sealed class SalePersistenceTests(PostgreSqlFixture fixture, ITestOutputH
         Assert.Empty(readContext.ChangeTracker.Entries());
         Assert.Contains(commands.Commands, sql =>
             sql.Contains("count(*)", StringComparison.OrdinalIgnoreCase)
-            && sql.Contains("s.\"CustomerName\" =", StringComparison.Ordinal)
+            && sql.Contains("ILIKE", StringComparison.OrdinalIgnoreCase)
             && !sql.Contains("lower(", StringComparison.OrdinalIgnoreCase)
-            && !sql.Contains("LIKE", StringComparison.OrdinalIgnoreCase));
+            && sql.Contains("ESCAPE", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(commands.Commands, sql =>
-            sql.Contains("s.\"BranchName\" =", StringComparison.Ordinal)
+            sql.Contains("ILIKE", StringComparison.OrdinalIgnoreCase)
             && sql.Contains("LIMIT", StringComparison.Ordinal)
             && !sql.Contains("\"SaleItems\"", StringComparison.Ordinal));
     }

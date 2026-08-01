@@ -1,0 +1,45 @@
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">ADMINISTRAÇÃO</p>
+        <h1>Usuários</h1>
+        <p class="page-subtitle">Crie e consulte acessos da operação.</p>
+    </div>
+</section>@if (message()) { <app-toast [message]="message()" [error]="isError()" /> }<div class="users-layout">
+    <section class="panel form-panel">
+        <div class="panel-title">
+            <div>
+                <h2>Novo usuário</h2>
+                <p>O usuário poderá entrar imediatamente.</p>
+            </div>
+        </div>
+        <form [formGroup]="form" (ngSubmit)="create()" novalidate><label for="username">Nome</label><input id="username"
+                formControlName="username" placeholder="Nome completo"><label for="email">E-mail</label><input
+                id="email" type="email" formControlName="email" placeholder="voce@empresa.com"><label
+                for="phone">Telefone</label><input id="phone" formControlName="phone"
+                placeholder="+5511999999999"><label for="password">Senha</label><input id="password" type="password"
+                formControlName="password" placeholder="Mínimo de 8 caracteres"><label for="role">Perfil</label><select
+                id="role" formControlName="role">
+                <option [ngValue]="UserRole.Customer">Cliente</option>
+                <option [ngValue]="UserRole.Manager">Gerente</option>
+                <option [ngValue]="UserRole.Admin">Administrador</option>
+            </select><button class="button button-primary button-full" type="submit" [disabled]="loading()">{{ loading()
+                ? 'Criando...' : 'Criar usuário' }}</button></form>
+    </section>
+    <section class="panel user-lookup">
+        <div class="panel-title">
+            <div>
+                <h2>Consultar usuário</h2>
+                <p>Use o UUID para consultar ou excluir.</p>
+            </div>
+        </div>
+        <form class="lookup-form" (ngSubmit)="lookup()"><input [(ngModel)]="lookupId" name="lookupId"
+                placeholder="UUID do usuário"><button class="button button-ghost" type="submit">Consultar</button>
+        </form>@if (user(); as current) {<div class="user-result"><span class="avatar avatar-large">{{
+                current.name.slice(0, 2).toUpperCase() }}</span>
+            <div>
+                <h3>{{ current.name }}</h3>
+                <p>{{ current.email }}</p><small>{{ roleName(current.role) }} · {{ statusName(current.status) }}</small>
+            </div><button class="danger-link" type="button" (click)="remove(current.id)">Excluir</button>
+        </div>}
+    </section>
+</div>

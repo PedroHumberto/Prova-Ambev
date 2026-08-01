@@ -71,20 +71,23 @@ To generate a coverage report, use `coverage-report.bat` on Windows or `coverage
 
 ## Run with Docker Compose
 
-The API container requires a trusted ASP.NET Core HTTPS development certificate. On Windows PowerShell, create it before starting the stack:
+The default Compose profile uses HTTP inside the local Docker network, so it does
+not require a host-specific certificate or secret. From `backend/`, run:
 
 ```powershell
-dotnet dev-certs https --clean
-dotnet dev-certs https --trust
-dotnet dev-certs https -ep "$env:APPDATA\ASP.NET\Https\Ambev.DeveloperEvaluation.WebApi.pfx" -p "development-password"
-$env:HTTPS_CERT_PASSWORD = "development-password"
 docker compose up --build
 ```
 
+The API waits for PostgreSQL before applying migrations. If the database is still
+starting, migration attempts are retried after 10, 30, 50, 60, and 90 seconds;
+permanent database or schema errors still stop the API.
+
 The services are then available at:
 
-- Swagger UI: `https://localhost:8081/swagger`
+- Angular frontend: `http://localhost:4200`
+- Swagger UI: `http://localhost:8080/swagger`
 - API over HTTP: `http://localhost:8080`
+- API through the frontend proxy: `http://localhost:4200/api`
 - Health checks: `http://localhost:8080/health`, `/health/live`, and `/health/ready`
 - RabbitMQ management UI: use the dynamically assigned host port shown by `docker compose ps`
 

@@ -1,4 +1,16 @@
 services:
+  frontend:
+    container_name: ambev_developer_evaluation_frontend
+    image: ${DOCKER_REGISTRY-}ambevdeveloperevaluationfrontend
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-4200}:80"
+    depends_on:
+      ambev.developerevaluation.webapi:
+        condition: service_started
+
   ambev.developerevaluation.webapi:
     container_name: ambev_developer_evaluation_webapi
     image: ${DOCKER_REGISTRY-}ambevdeveloperevaluationwebapi
@@ -8,23 +20,18 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_HTTP_PORTS=8080
-      - ASPNETCORE_HTTPS_PORTS=8081
-      - ASPNETCORE_Kestrel__Certificates__Default__Path=/https/Ambev.DeveloperEvaluation.WebApi.pfx
-      - ASPNETCORE_Kestrel__Certificates__Default__Password=${HTTPS_CERT_PASSWORD}
+      # Compose uses the HTTP endpoint so it runs without a host-specific development certificate.
+      - ASPNETCORE_HTTPS_PORTS=
+      - HttpsRedirection__Enabled=false
       - ConnectionStrings__DefaultConnection=Host=ambev.developerevaluation.database;Port=5432;Database=developer_evaluation;Username=developer;Password=ev@luAt10n
       - SalesMessaging__ConnectionString=amqp://developer:development@ambev.developerevaluation.broker:5672
     ports:
       - "8080:8080"
-      - "8081:8081"
     depends_on:
       ambev.developerevaluation.database:
         condition: service_healthy
       ambev.developerevaluation.broker:
         condition: service_healthy
-    volumes:
-      - ${APPDATA}/Microsoft/UserSecrets:/home/app/.microsoft/usersecrets:ro
-      - ${APPDATA}/ASP.NET/Https:/https:ro
-
   ambev.developerevaluation.database:
     container_name: ambev_developer_evaluation_database
     image: postgres:13
@@ -40,6 +47,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 30s
     restart: unless-stopped
 
   ambev.developerevaluation.broker:

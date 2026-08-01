@@ -1,0 +1,75 @@
+<section class="page-heading detail-heading">
+    <div><a class="back-link" routerLink="/sales">← Voltar para vendas</a>@if (sale(); as current) {<p class="eyebrow">
+            DETALHE DA VENDA</p>
+        <div class="title-line">
+            <h1>{{ current.saleNumber }}</h1><span class="status-pill"
+                [class.status-cancelled]="current.status === 'Cancelled'">{{ current.status === 'Cancelled' ?
+                'Cancelada' : 'Ativa' }}</span>
+        </div>
+        <p class="page-subtitle">Criada em {{ current.createdAt | date:'dd/MM/yyyy HH:mm' }}</p>}
+    </div>@if (sale(); as current) {<div class="heading-actions"><a class="button button-ghost"
+            [routerLink]="['/sales', current.id, 'edit']">Editar venda</a><button class="button button-danger"
+            type="button" [disabled]="current.status === 'Cancelled' || actionLoading()" (click)="cancelSale()">{{
+            actionLoading() ? 'Cancelando...' : 'Cancelar venda' }}</button></div>}
+</section>
+@if (message()) { <app-toast [message]="message()" [error]="true" /> } @if (loading()) { <div class="loading-state">
+    <span class="spinner"></span>Carregando venda...</div> } @else if (sale(); as current) {<div class="detail-grid">
+    <section class="panel info-panel">
+        <div class="panel-title">
+            <h2>Informações gerais</h2>
+        </div>
+        <div class="info-grid">
+            <div><span>CLIENTE</span><strong>{{ current.customerName }}</strong><small class="mono">{{
+                    current.customerId }}</small></div>
+            <div><span>FILIAL</span><strong>{{ current.branchName }}</strong><small class="mono">{{ current.branchId
+                    }}</small></div>
+            <div><span>DATA DA VENDA</span><strong>{{ current.saleDate | date:'dd/MM/yyyy HH:mm' }}</strong></div>
+            <div><span>ÚLTIMA ATUALIZAÇÃO</span><strong>{{ current.updatedAt | date:'dd/MM/yyyy HH:mm' }}</strong></div>
+        </div>
+    </section>
+    <section class="panel summary-panel">
+        <div class="panel-title">
+            <h2>Resumo financeiro</h2>
+        </div>
+        <div class="summary-line"><span>Subtotal</span><strong>{{ current.subtotal | currency:'BRL':'symbol':'1.2-2'
+                }}</strong></div>
+        <div class="summary-line"><span>Descontos</span><strong class="discount">- {{ current.discountAmount |
+                currency:'BRL':'symbol':'1.2-2' }}</strong></div>
+        <div class="summary-total"><span>Total da venda</span><strong>{{ current.totalAmount |
+                currency:'BRL':'symbol':'1.2-2' }}</strong></div>
+    </section>
+</div>
+<section class="panel table-panel items-panel">
+    <div class="table-head">
+        <div>
+            <h2>Itens da venda</h2>
+            <p>{{ current.items.length }} itens</p>
+        </div>
+    </div>
+    <div class="table-scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th>Produto</th>
+                    <th>Quantidade</th>
+                    <th>Preço unitário</th>
+                    <th>Desconto</th>
+                    <th class="align-right">Total</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>@for (item of current.items; track item.id) {<tr [class.cancelled-row]="item.status === 'Cancelled'">
+                    <td><strong>{{ item.productName }}</strong><small class="cell-sub mono">{{ item.productId }}</small>
+                    </td>
+                    <td>{{ item.quantity }}</td>
+                    <td>{{ item.unitPrice | currency:'BRL':'symbol':'1.2-2' }}</td>
+                    <td>{{ item.discountPercentage }}%</td>
+                    <td class="align-right money">{{ item.totalAmount | currency:'BRL':'symbol':'1.2-2' }}</td>
+                    <td class="align-right">@if (item.status === 'Active' && current.status === 'Active') {<button
+                            type="button" class="row-action danger-link" (click)="cancelItem(item.id)">Cancelar
+                            item</button>} @else {<span class="muted">Cancelado</span>}</td>
+                </tr>}</tbody>
+        </table>
+    </div>
+</section> } @else if (!loading()) { <app-empty-state title="Venda não encontrada"
+    text="A venda solicitada não está disponível." /> }
