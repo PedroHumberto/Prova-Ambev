@@ -23,6 +23,7 @@ services:
       # Compose uses the HTTP endpoint so it runs without a host-specific development certificate.
       - ASPNETCORE_HTTPS_PORTS=
       - HttpsRedirection__Enabled=false
+      - DemoData__Enabled=true
       - ConnectionStrings__DefaultConnection=Host=ambev.developerevaluation.database;Port=5432;Database=developer_evaluation;Username=developer;Password=ev@luAt10n
       - SalesMessaging__ConnectionString=amqp://developer:development@ambev.developerevaluation.broker:5672
     ports:

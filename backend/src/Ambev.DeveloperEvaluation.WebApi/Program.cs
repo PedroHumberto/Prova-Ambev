@@ -5,6 +5,7 @@ using Ambev.DeveloperEvaluation.Common.Security;
 using Ambev.DeveloperEvaluation.Common.Validation;
 using Ambev.DeveloperEvaluation.IoC;
 using Ambev.DeveloperEvaluation.ORM;
+using Ambev.DeveloperEvaluation.ORM.DataSeeding;
 using Ambev.DeveloperEvaluation.WebApi.Middleware;
 using Ambev.DeveloperEvaluation.WebApi.Swagger;
 using System.Net.Sockets;
@@ -21,7 +22,7 @@ namespace Ambev.DeveloperEvaluation.WebApi;
 
 public class Program
 {
-    private static readonly TimeSpan[] DatabaseMigrationRetryDelays =
+    private static readonly TimeSpan[] DatabaseInitializationRetryDelays =
     [
         TimeSpan.FromSeconds(10),
         TimeSpan.FromSeconds(30),
@@ -137,9 +138,10 @@ public class Program
 
             app.MapControllers();
 
-            await MigrateDatabaseWithRetryAsync(
+            await InitializeDatabaseWithRetryAsync(
                 app.Services.GetRequiredService<IServiceScopeFactory>(),
                 app.Logger,
+                builder.Configuration.GetValue("DemoData:Enabled", false),
                 app.Lifetime.ApplicationStopping);
 
             await app.RunAsync();
@@ -155,9 +157,10 @@ public class Program
         }
     }
 
-    private static async Task MigrateDatabaseWithRetryAsync(
+    private static async Task InitializeDatabaseWithRetryAsync(
         IServiceScopeFactory scopeFactory,
         Microsoft.Extensions.Logging.ILogger logger,
+        bool demoDataEnabled,
         CancellationToken cancellationToken)
     {
         for (var attempt = 0; ; attempt++)
@@ -168,20 +171,26 @@ public class Program
                 var context = scope.ServiceProvider.GetRequiredService<DefaultContext>();
                 await context.Database.MigrateAsync(cancellationToken);
 
+                if (demoDataEnabled)
+                {
+                    var demoDataSeeder = scope.ServiceProvider.GetRequiredService<DemoDataSeeder>();
+                    await demoDataSeeder.SeedAsync(cancellationToken);
+                }
+
                 if (attempt > 0)
-                    logger.LogInformation("Database migrations completed after {Attempts} attempt(s)", attempt + 1);
+                    logger.LogInformation("Database initialization completed after {Attempts} attempt(s)", attempt + 1);
 
                 return;
             }
-            catch (Exception exception) when (IsTransientDatabaseFailure(exception) && attempt < DatabaseMigrationRetryDelays.Length)
+            catch (Exception exception) when (IsTransientDatabaseFailure(exception) && attempt < DatabaseInitializationRetryDelays.Length)
             {
-                var delay = DatabaseMigrationRetryDelays[attempt];
+                var delay = DatabaseInitializationRetryDelays[attempt];
                 logger.LogWarning(
                     exception,
-                    "Database is not ready. Retrying migrations in {RetryDelaySeconds} seconds (attempt {NextAttempt} of {TotalAttempts})",
+                    "Database is not ready. Retrying initialization in {RetryDelaySeconds} seconds (attempt {NextAttempt} of {TotalAttempts})",
                     delay.TotalSeconds,
                     attempt + 2,
-                    DatabaseMigrationRetryDelays.Length + 1);
+                    DatabaseInitializationRetryDelays.Length + 1);
 
                 await Task.Delay(delay, cancellationToken);
             }

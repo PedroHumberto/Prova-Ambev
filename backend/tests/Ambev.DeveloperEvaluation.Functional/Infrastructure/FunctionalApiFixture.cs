@@ -30,10 +30,13 @@ public sealed class FunctionalApiFixture : IAsyncLifetime
 
     public HttpClient Client { get; private set; } = null!;
 
+    public IServiceProvider Services => _factory?.Services
+        ?? throw new InvalidOperationException("The functional API host has not been initialized.");
+
     public async Task InitializeAsync()
     {
         await _postgres.StartAsync();
-        _factory = new FunctionalWebApplicationFactory(_postgres.GetConnectionString());
+        _factory = new FunctionalWebApplicationFactory(_postgres.GetConnectionString(), demoDataEnabled: false);
         Client = _factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
@@ -49,7 +52,7 @@ public sealed class FunctionalApiFixture : IAsyncLifetime
     }
 }
 
-internal sealed class FunctionalWebApplicationFactory(string connectionString)
+internal sealed class FunctionalWebApplicationFactory(string connectionString, bool demoDataEnabled)
     : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -60,6 +63,7 @@ internal sealed class FunctionalWebApplicationFactory(string connectionString)
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:DefaultConnection"] = connectionString,
+                ["DemoData:Enabled"] = demoDataEnabled.ToString(),
                 ["Jwt:SecretKey"] = "YourSuperSecretKeyForJwtTokenGenerationThatShouldBeAtLeast32BytesLong",
                 ["SalesMessaging:ConnectionString"] = "amqp://guest:guest@localhost:5672",
                 ["SalesMessaging:OutboxBatchSize"] = "20",
