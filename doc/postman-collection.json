@@ -1,0 +1,691 @@
+{
+  "info": {
+    "_postman_id": "7d8ef8c5-5a9d-4a1d-8f26-ambev-api-2026",
+    "name": "Ambev Developer Evaluation API",
+    "description": "Collection for the current HTTP implementation. Run requests in order to create a temporary user, authenticate it, create a sale, exercise the sale endpoints, and clean up the user. The API uses response envelopes, flat sale request fields, numeric user enums, and Bearer authentication for catalog and sales.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "testEmail",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "testPassword",
+      "value": "PostmanTest1!",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "saleId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "saleItemId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customerId",
+      "value": "11111111-1111-1111-1111-111111111111",
+      "type": "string"
+    },
+    {
+      "key": "branchId",
+      "value": "22222222-2222-2222-2222-222222222222",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "33333333-3333-3333-3333-333333333333",
+      "type": "string"
+    },
+    {
+      "key": "productId2",
+      "value": "44444444-4444-4444-4444-444444444444",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "description": "Unauthenticated operational checks.",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Health endpoint responds', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Health - Live",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health/live",
+              "host": ["{{baseUrl}}"],
+              "path": ["health", "live"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Liveness is healthy', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Health - Ready",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health/ready",
+              "host": ["{{baseUrl}}"],
+              "path": ["health", "ready"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Readiness endpoint responds', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "description": "User lifecycle used to make the collection independent from pre-existing database data. UserStatus: 1 = Active. UserRole: 3 = Admin.",
+      "item": [
+        {
+          "name": "Create test user",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('testEmail', 'postman.' + Date.now() + '@example.com');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('userId', json.data.id);",
+                  "pm.test('User was created', function () { pm.expect(json.success).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"Postman Test User\",\n  \"password\": \"{{testPassword}}\",\n  \"phone\": \"+5511999990000\",\n  \"email\": \"{{testEmail}}\",\n  \"status\": 1,\n  \"role\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/Users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "Users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Authenticate test user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('accessToken', json.data.token);",
+                  "pm.test('JWT was returned', function () { pm.expect(json.data.token).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/Auth",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "Auth"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get test user",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/Users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "Users", "{{userId}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.test('Returned user matches the created user', function () { pm.expect(pm.response.json().data.id).to.eql(pm.collectionVariables.get('userId')); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sales",
+      "description": "Sale lifecycle. Sale date must be UTC and quantities must be between 1 and 20. Server calculates discounts, totals, status, and audit fields.",
+      "item": [
+        {
+          "name": "Create sale",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('saleId', json.data.id);",
+                  "pm.collectionVariables.set('saleItemId', json.data.items[0].id);",
+                  "pm.test('Sale was created with calculated total', function () { pm.expect(json.data.totalAmount).to.be.a('number'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"saleNumber\": \"POSTMAN-{{$timestamp}}\",\n  \"saleDate\": \"2026-07-31T12:00:00Z\",\n  \"customerId\": \"{{customerId}}\",\n  \"customerName\": \"Postman Customer\",\n  \"branchId\": \"{{branchId}}\",\n  \"branchName\": \"Postman Branch\",\n  \"items\": [\n    {\n      \"productId\": \"{{productId}}\",\n      \"productName\": \"Postman Product One\",\n      \"quantity\": 2,\n      \"unitPrice\": 10.00\n    },\n    {\n      \"productId\": \"{{productId2}}\",\n      \"productName\": \"Postman Product Two\",\n      \"quantity\": 5,\n      \"unitPrice\": 20.00\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sales",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sales"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List sales with filters and ordering",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sales?_page=1&_size=10&_order=saleDate desc,totalAmount asc&saleNumber=POSTMAN&saleDateFrom=2026-07-01T00:00:00Z&saleDateTo=2026-08-01T00:00:00Z&customerId={{customerId}}&customerName=Postman%20Customer&branchId={{branchId}}&branchName=Postman%20Branch&status=Active",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sales"],
+              "query": [
+                {"key": "_page", "value": "1"},
+                {"key": "_size", "value": "10"},
+                {"key": "_order", "value": "saleDate desc,totalAmount asc"},
+                {"key": "saleNumber", "value": "POSTMAN"},
+                {"key": "saleDateFrom", "value": "2026-07-01T00:00:00Z"},
+                {"key": "saleDateTo", "value": "2026-08-01T00:00:00Z"},
+                {"key": "customerId", "value": "{{customerId}}"},
+                {"key": "customerName", "value": "Postman Customer"},
+                {"key": "branchId", "value": "{{branchId}}"},
+                {"key": "branchName", "value": "Postman Branch"},
+                {"key": "status", "value": "Active"}
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.test('Paged sales response was returned', function () { pm.expect(pm.response.json().data).to.have.property('pageNumber', 1); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get sale by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sales/{{saleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sales", "{{saleId}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.test('Returned sale has the captured ID', function () { pm.expect(pm.response.json().data.id).to.eql(pm.collectionVariables.get('saleId')); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update sale",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"saleNumber\": \"POSTMAN-UPDATED-{{$timestamp}}\",\n  \"saleDate\": \"2026-07-31T13:00:00Z\",\n  \"customerId\": \"{{customerId}}\",\n  \"customerName\": \"Postman Customer Updated\",\n  \"branchId\": \"{{branchId}}\",\n  \"branchName\": \"Postman Branch Updated\",\n  \"items\": [\n    {\n      \"id\": \"{{saleItemId}}\",\n      \"productId\": \"{{productId}}\",\n      \"productName\": \"Postman Product One Updated\",\n      \"quantity\": 4,\n      \"unitPrice\": 12.50\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sales/{{saleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sales", "{{saleId}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.test('Sale was replaced', function () { pm.expect(pm.response.json().data.customerName).to.eql('Postman Customer Updated'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancel sale item",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sales/{{saleId}}/items/{{saleItemId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sales", "{{saleId}}", "items", "{{saleItemId}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.test('Sale item was cancelled', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancel sale",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sales/{{saleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sales", "{{saleId}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.test('Sale was cancelled', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Catalog",
+      "description": "Catalog searches are backed by sale snapshots. Run after Create sale to receive the seeded/requested customer, branch, and product values.",
+      "item": [
+        {
+          "name": "Search customers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/catalog/customers?search=Postman&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "catalog", "customers"],
+              "query": [
+                {"key": "search", "value": "Postman"},
+                {"key": "limit", "value": "10"}
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.test('Customer catalog response was returned', function () { pm.expect(pm.response.json().data).to.be.an('array'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search branches",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/catalog/branches?search=Postman&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "catalog", "branches"],
+              "query": [
+                {"key": "search", "value": "Postman"},
+                {"key": "limit", "value": "10"}
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.test('Branch catalog response was returned', function () { pm.expect(pm.response.json().data).to.be.an('array'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/catalog/products?search=Postman&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "catalog", "products"],
+              "query": [
+                {"key": "search", "value": "Postman"},
+                {"key": "limit", "value": "10"}
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.test('Product catalog response was returned', function () { pm.expect(pm.response.json().data).to.be.an('array'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cleanup",
+      "description": "Deletes the temporary user created by this collection. Sale cancellation is performed in the Sales folder.",
+      "item": [
+        {
+          "name": "Delete test user",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/Users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "Users", "{{userId}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.test('Temporary user was deleted', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
