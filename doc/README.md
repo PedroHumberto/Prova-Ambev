@@ -1,6 +1,6 @@
 # System Documentation
 
-This folder describes the repository's implemented state as of 2026-07-31. The code and automated tests are the source of truth whenever documentation differs from behavior.
+This folder describes the repository's implemented state as of 2026-08-01. The code and automated tests are the source of truth whenever documentation differs from behavior.
 
 ## Navigation
 
@@ -35,4 +35,4 @@ The ADRs that were stored under `.doc/` are not guaranteed to be available in a 
 
 ## Last verification
 
-Date: 2026-07-31. .NET SDK 8.0.423, Release build passed, 400 Unit, 50 Integration, and 10 Functional tests passed. Frontend tests, lint, and build passed. See [verification evidence](testing/testing-evidence.md) for limits and commands.
+Date: 2026-08-01 UTC. .NET SDK 10.0.302, Release build passed with 0 warnings and 0 errors, and 400 Unit, 50 Integration, and 10 Functional tests passed. Compose and runtime checks also passed. See [verification evidence](testing/testing-evidence.md) for environment details and limits.
