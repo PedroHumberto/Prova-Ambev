@@ -7,6 +7,11 @@ export interface ApiResponseWithData<T> extends ApiResponse {
   data: T;
 }
 
+export interface CatalogItem {
+  id: string;
+  name: string;
+}
+
 export interface ProblemDetails {
   title?: string;
   detail?: string;

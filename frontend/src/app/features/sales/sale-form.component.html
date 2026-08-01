@@ -20,16 +20,22 @@
             </div>
             <div><label for="saleDate">Data da venda</label><input id="saleDate" type="datetime-local"
                     formControlName="saleDate"><small class="field-error">{{ errorFor('saleDate') }}</small></div>
-            <div><label for="customerId">ID do cliente</label><input id="customerId" formControlName="customerId"
-                    placeholder="UUID"><small class="field-error">{{ errorFor('customerId') }}</small></div>
-            <div><label for="customerName">Nome do cliente</label><input id="customerName"
-                    formControlName="customerName" placeholder="Nome completo"><small class="field-error">{{
-                    errorFor('customerName') }}</small></div>
-            <div><label for="branchId">ID da filial</label><input id="branchId" formControlName="branchId"
-                    placeholder="UUID"><small class="field-error">{{ errorFor('branchId') }}</small></div>
-            <div><label for="branchName">Nome da filial</label><input id="branchName" formControlName="branchName"
-                    placeholder="Ex.: Centro de distribuição"><small class="field-error">{{ errorFor('branchName')
-                    }}</small></div>
+            <div class="autocomplete-field"><label for="customerName">Cliente</label><input id="customerName"
+                    formControlName="customerName" placeholder="Buscar cliente" autocomplete="off"
+                    (focus)="searchCatalog('customers', form.controls.customerName.value ?? '')"
+                    (input)="customerInput($any($event.target).value)"><small class="field-error">{{
+                    errorFor('customerId') || errorFor('customerName') }}</small>@if (customers().length) {<div
+                    class="autocomplete-options">@for (item of customers(); track item.id) {<button type="button"
+                        class="autocomplete-option" (click)="selectCustomer(item)"><strong>{{ item.name }}</strong><small
+                            class="mono">{{ item.id }}</small></button>}</div>}</div>
+            <div class="autocomplete-field"><label for="branchName">Filial</label><input id="branchName"
+                    formControlName="branchName" placeholder="Buscar filial" autocomplete="off"
+                    (focus)="searchCatalog('branches', form.controls.branchName.value ?? '')"
+                    (input)="branchInput($any($event.target).value)"><small class="field-error">{{
+                    errorFor('branchId') || errorFor('branchName') }}</small>@if (branches().length) {<div
+                    class="autocomplete-options">@for (item of branches(); track item.id) {<button type="button"
+                        class="autocomplete-option" (click)="selectBranch(item)"><strong>{{ item.name }}</strong><small
+                            class="mono">{{ item.id }}</small></button>}</div>}</div>
         </div>
     </section>
     <section class="panel form-panel">
@@ -42,10 +48,13 @@
         <div class="items-editor" formArrayName="items">@for (item of items.controls; track item; let index = $index) {
             <div class="item-editor" [formGroupName]="index">
                 <div class="item-index">{{ (index + 1).toString().padStart(2, '0') }}</div>
-                <div><label [for]="'productId' + index">Produto ID</label><input [id]="'productId' + index"
-                        formControlName="productId" placeholder="UUID"></div>
-                <div><label [for]="'productName' + index">Produto</label><input [id]="'productName' + index"
-                        formControlName="productName" placeholder="Nome do produto"></div>
+                <div class="autocomplete-field"><label [for]="'productName' + index">Produto</label><input
+                        [id]="'productName' + index" formControlName="productName" placeholder="Buscar produto"
+                        autocomplete="off" (focus)="searchCatalog('products', item.get('productName')?.value ?? '', index)"
+                        (input)="productInput(index, $any($event.target).value)">@if (products()[index]?.length) {<div
+                        class="autocomplete-options">@for (product of products()[index]; track product.id) {<button
+                            type="button" class="autocomplete-option" (click)="selectProduct(index, product)"><strong>{{
+                                product.name }}</strong><small class="mono">{{ product.id }}</small></button>}</div>}</div>
                 <div><label [for]="'quantity' + index">Qtd.</label><input [id]="'quantity' + index" type="number"
                         min="1" max="20" formControlName="quantity"></div>
                 <div><label [for]="'unitPrice' + index">Preço unit.</label><input [id]="'unitPrice' + index"
